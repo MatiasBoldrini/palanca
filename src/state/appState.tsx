@@ -15,7 +15,6 @@ import {
 } from '../model/anthropometry'
 import type { SetupPatch } from '../model/interact'
 import {
-  type BalanceMode,
   type Coordination,
   DEFAULT_TASK,
   type ExerciseId,
@@ -45,7 +44,7 @@ const initialState: AppState = {
   },
   playing: false,
   showComGuides: true,
-  showMomentArms: false,
+  showMomentArms: true,
   showLoadMap: true,
   showCurves: true,
 }
@@ -59,7 +58,6 @@ export type Action =
   | { type: 'resetProportions' }
   | { type: 'setCoordination'; patch: Partial<Coordination> }
   | { type: 'setParams'; patch: SetupPatch }
-  | { type: 'setBalance'; balance: BalanceMode }
   | { type: 'setPlaying'; playing: boolean }
   | { type: 'toggle'; key: ViewFlag }
   | { type: 'hydrate'; state: Partial<AppState> }
@@ -86,7 +84,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'setExercise':
       return { ...state, exercise: action.exercise, task: { ...state.task, progress: 0 } }
     case 'setTask':
-      return { ...state, task: { ...state.task, ...action.patch } }
+      return { ...state, task: { ...state.task, ...action.patch, balance: 'cop' } }
     case 'setAnthro':
       return { ...state, anthro: withDerivedHeight({ ...state.anthro, ...action.patch }) }
     case 'resetProportions': {
@@ -108,14 +106,12 @@ function reducer(state: AppState, action: Action): AppState {
         next = { ...next, anthro: withDerivedHeight({ ...next.anthro, ...action.patch.anthro }) }
       }
       if (action.patch.task) {
-        next = { ...next, task: { ...next.task, ...action.patch.task } }
+        next = { ...next, task: { ...next.task, ...action.patch.task, balance: 'cop' } }
       }
       return action.patch.coordination
         ? withCoordination(next, action.patch.coordination)
         : next
     }
-    case 'setBalance':
-      return { ...state, task: { ...state.task, balance: action.balance } }
     case 'setPlaying':
       return { ...state, playing: action.playing }
     case 'toggle':
@@ -157,7 +153,7 @@ function encode(state: AppState): string {
     cp: round(state.task.cop),
     bl: state.task.balance === 'cop' ? 0 : 1,
     bp: round(state.task.barPosition),
-    c: [round(c.kneeTravel), round(c.spineFlexion, 1), round(c.barOffset)],
+    c: [round(c.kneeTravel), round(c.spineFlexion, 1), round(c.barOffset), round(c.armLean, 1)],
     v: [
       state.showComGuides ? 1 : 0,
       state.showMomentArms ? 1 : 0,
@@ -191,12 +187,20 @@ function decode(hash: string): Partial<AppState> | null {
         progress: p.pr,
         depth: p.dp,
         cop: p.cp,
-        balance: p.bl === 1 ? 'bar' : 'cop',
+        // Older links could pin the bar; the UI only offers support-point mode.
+        balance: 'cop',
         barPosition: p.bp,
       },
       coordination: {
         ...initialState.coordination,
-        [exercise]: { kneeTravel: p.c[0], spineFlexion: p.c[1], barOffset: p.c[2] },
+        [exercise]: {
+          kneeTravel: p.c[0],
+          spineFlexion: p.c[1],
+          barOffset: p.c[2],
+          // Older links predate the arm lean, and they were all drawn with the
+          // arm vertical.
+          armLean: p.c[3] ?? 0,
+        },
       },
       showComGuides: p.v[0] === 1,
       showMomentArms: p.v[1] === 1,

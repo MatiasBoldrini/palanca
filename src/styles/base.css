@@ -50,11 +50,9 @@
   --grid: rgba(255, 255, 255, 0.06);
   /* Same as the canvas: strokes knock out against it. */
   --figure-halo: #0c0c0e;
-  --figure-ink: rgba(255, 255, 255, 0.82);
-  /* Parts of the body the model computes no joint moment for. Kept fainter
-     than the bottom of the load ramp, so "nothing to say" never reads as
-     "barely loaded". */
-  --figure-mute: rgba(255, 255, 255, 0.22);
+  /* Opaque mid-dark grey for the whole skeleton. Translucent white used to
+     read as "blanco" on the black stage; solid ink cannot stack-brighten. */
+  --figure-ink: #4e4e54;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -75,21 +73,20 @@
     --arm-ankle: #7440c4;
 
     --bg: #f4f4f6;
-    --bg-raise: #ffffff;
+    --bg-raise: #f4f4f6;
     --surface: rgba(0, 0, 0, 0.045);
-    --surface-strong: #ffffff;
-    --surface-solid: #ffffff;
+    --surface-strong: rgba(0, 0, 0, 0.08);
+    --surface-solid: #f4f4f6;
     --hairline: rgba(0, 0, 0, 0.1);
     --hairline-strong: rgba(0, 0, 0, 0.18);
     --text: rgba(0, 0, 0, 0.9);
     --text-2: rgba(0, 0, 0, 0.58);
     --text-3: rgba(0, 0, 0, 0.4);
     --shadow-lift: 0 18px 44px rgba(0, 0, 0, 0.16);
-    --stage: #ffffff;
+    --stage: #f4f4f6;
     --grid: rgba(0, 0, 0, 0.06);
-    --figure-halo: #ffffff;
+    --figure-halo: #f4f4f6;
     --figure-ink: rgba(0, 0, 0, 0.78);
-    --figure-mute: rgba(0, 0, 0, 0.15);
   }
 }
 

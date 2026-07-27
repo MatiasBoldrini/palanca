@@ -32,8 +32,8 @@ const EDINGTON: Anthropometry = {
 }
 
 const task = { ...DEFAULT_TASK, load: 180, progress: 0 }
-const closeBar = { kneeTravel: 0, spineFlexion: 12, barOffset: 0 }
-const farBar = { kneeTravel: 1, spineFlexion: 12, barOffset: 0 }
+const closeBar = { kneeTravel: 0, spineFlexion: 12, armLean: 0, barOffset: 0 }
+const farBar = { kneeTravel: 1, spineFlexion: 12, armLean: 0, barOffset: 0 }
 
 describe('anthropometric tables', () => {
   it('body segment masses sum to the whole body', () => {
@@ -217,7 +217,7 @@ describe('deadlift solver', () => {
   })
 })
 
-describe('the arm hangs vertically', () => {
+describe('the arm hangs vertically at zero lean', () => {
   // Load-bearing assumption of the whole deadlift solve, and nothing else
   // guarded it. When the body or the task changes, what may move is the bar;
   // the shoulder has to come with it.
@@ -275,6 +275,79 @@ describe('the arm hangs vertically', () => {
   })
 })
 
+describe('leaning the arm off vertical', () => {
+  const leaned = { ...closeBar, armLean: 6 }
+
+  it('carries the shoulder in front of the bar by the arm trigonometry', () => {
+    for (const armLean of [0, 3, 6, 10, 15]) {
+      const f = solveDeadlift(EDINGTON, task, { ...closeBar, armLean })
+      const ahead = f.posture.shoulder.x - f.posture.bar.x
+      const where = `${armLean} deg`
+      expect(ahead, where).toBeCloseTo(EDINGTON.arm * Math.sin((armLean * Math.PI) / 180), 6)
+      // The hand stays on the bar and the arm keeps its length: leaning it is a
+      // rotation about the grip, not a stretch.
+      expect(dist(f.posture.shoulder, f.posture.hand), where).toBeCloseTo(EDINGTON.arm, 6)
+      expect(f.feasible, where).toBe(true)
+    }
+  })
+
+  it('charges the shoulder for the offset, and nothing when there is none', () => {
+    const vertical = solveDeadlift(EDINGTON, task, closeBar)
+    expect(Math.abs(vertical.kinetics.shoulderMoment)).toBeLessThan(0.5)
+
+    const f = solveDeadlift(EDINGTON, task, leaned)
+    // The bar can only push the hand up, so the whole offset is held by the
+    // shoulder: load times gravity times the offset, split between two arms.
+    const expected = (task.load * GRAVITY * f.kinetics.shoulderMomentArm) / 2
+    expect(f.kinetics.shoulderMoment).toBeGreaterThan(expected)
+    expect(f.kinetics.shoulderMoment).toBeLessThan(expected * 1.05)
+  })
+
+  it('makes the shoulder cost grow with both the lean and the load', () => {
+    let previous = 0
+    for (const armLean of [0, 3, 6, 10, 15]) {
+      const m = solveDeadlift(EDINGTON, task, { ...closeBar, armLean }).kinetics.shoulderMoment
+      expect(m, `${armLean} deg`).toBeGreaterThan(previous)
+      previous = m
+    }
+    const light = solveDeadlift(EDINGTON, { ...task, load: 60 }, leaned)
+    const heavy = solveDeadlift(EDINGTON, { ...task, load: 240 }, leaned)
+    expect(heavy.kinetics.shoulderMoment).toBeGreaterThan(light.kinetics.shoulderMoment * 3)
+  })
+
+  it('leaves the squat alone, where the bar rests on the back', () => {
+    const a = anthropometryFromHeight(1.75, 85)
+    const squatTask = { ...DEFAULT_TASK, load: 150, depth: 0.55 }
+    for (const armLean of [0, 6, 15]) {
+      const f = solveSquat(a, squatTask, { ...closeBar, armLean, barOffset: 0.08 })
+      expect(f.kinetics.shoulderMoment, `${armLean} deg`).toBe(0)
+      expect(f.kinetics.moment.hip, `${armLean} deg`).toBeCloseTo(
+        solveSquat(a, squatTask, { ...closeBar, armLean: 0, barOffset: 0.08 }).kinetics.moment.hip,
+        6,
+      )
+    }
+  })
+
+  /*
+   * A shoulder held in front of the bar cannot also be stacked over it, so the
+   * lockout keeps its locked knees but finishes leaning by about the angle the
+   * arm was asked to hold. That is not the model giving up: standing up
+   * straight is what puts the arm back on the vertical, which is why every
+   * lifter's arms are vertical at the top no matter how the pull started.
+   */
+  it('locks the knees out, leaning by about as much as the arm does', () => {
+    for (const armLean of [3, 6, 10, 15]) {
+      const top = solveDeadlift(EDINGTON, { ...task, progress: 1 }, { ...closeBar, armLean })
+      const where = `${armLean} deg`
+      expect(top.feasible, where).toBe(true)
+      expect(top.angles.kneeInterior, where).toBeGreaterThan(170)
+      const trunkFromVertical = 90 - top.angles.trunk
+      expect(trunkFromVertical, where).toBeGreaterThan(armLean * 0.5)
+      expect(trunkFromVertical, where).toBeLessThan(armLean + 1)
+    }
+  })
+})
+
 describe('lockout', () => {
   // Near full extension the joint angle is extremely sensitive to length:
   // shortening the reach by one per cent to keep the chain solvable bent the
@@ -284,7 +357,7 @@ describe('lockout', () => {
   it('finishes standing up, whatever the coordination', () => {
     for (const kneeTravel of [0, 0.5, 1]) {
       for (const spineFlexion of [0, 12, 40]) {
-        const coord = { kneeTravel, spineFlexion, barOffset: 0 }
+        const coord = { kneeTravel, spineFlexion, armLean: 0, barOffset: 0 }
         const top = solveDeadlift(EDINGTON, { ...task, progress: 1 }, coord)
         const where = `knee ${kneeTravel}, spine ${spineFlexion}`
         expect(angleBetween(top.posture.knee, top.posture.hip, top.posture.shoulder), where)
@@ -374,6 +447,7 @@ describe('control ranges', () => {
     'barPosition',
     'kneeTravel',
     'spineFlexion',
+    'armLean',
     'foot',
     'shank',
     'thigh',
@@ -446,8 +520,8 @@ describe('control ranges', () => {
 describe('squat solver', () => {
   const a = anthropometryFromHeight(1.75, 85)
   const squatTask = { ...DEFAULT_TASK, load: 150, progress: 0, depth: 0.55 }
-  const highBar = { kneeTravel: 0.8, spineFlexion: 6, barOffset: 0.0 }
-  const lowBar = { kneeTravel: 0.2, spineFlexion: 6, barOffset: 0.08 }
+  const highBar = { kneeTravel: 0.8, spineFlexion: 6, armLean: 0, barOffset: 0.0 }
+  const lowBar = { kneeTravel: 0.2, spineFlexion: 6, armLean: 0, barOffset: 0.08 }
 
   it('keeps the system balanced over midfoot at every depth', () => {
     for (let i = 0; i <= 10; i++) {

@@ -50,31 +50,25 @@ const LOAD_JOINTS: { key: JointKey; label: string; point: (p: Posture) => Vec2 }
 type Rgb = readonly [number, number, number]
 
 /**
- * Muted heat for joint demand only: dusty gold → brick → deep red. Kept dull
- * on purpose — neon yellow/orange was reading as glow, not load.
+ * Muted heat for joint demand: dusty gold → brick → deep red. The skeleton
+ * underneath stays --figure-ink; heat is an overlay that fades to transparent
+ * mid-limb so low demand never paints the body white.
  */
-/** Opaque --figure-ink over --stage. SVG stops need solid rgb, not rgba. */
-function figureInkRgb(dark: boolean): Rgb {
-  return dark ? [0xd3, 0xd3, 0xd5] : [0x38, 0x38, 0x3a]
-}
-
 function rgbCss(c: Rgb): string {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
 }
 
 const HEAT_STOPS: { dark: { t: number; c: Rgb }[]; light: { t: number; c: Rgb }[] } = {
   dark: [
-    { t: 0, c: figureInkRgb(true) },
-    { t: 0.28, c: [0xa8, 0x8a, 0x3c] },
-    { t: 0.58, c: [0xa6, 0x62, 0x34] },
-    { t: 0.82, c: [0x96, 0x3e, 0x34] },
+    { t: 0, c: [0xa8, 0x8a, 0x3c] },
+    { t: 0.4, c: [0xa6, 0x62, 0x34] },
+    { t: 0.72, c: [0x96, 0x3e, 0x34] },
     { t: 1, c: [0x7a, 0x2c, 0x2c] },
   ],
   light: [
-    { t: 0, c: figureInkRgb(false) },
-    { t: 0.28, c: [0xb8, 0x90, 0x28] },
-    { t: 0.58, c: [0xb0, 0x62, 0x24] },
-    { t: 0.82, c: [0x9e, 0x3a, 0x2c] },
+    { t: 0, c: [0xb8, 0x90, 0x28] },
+    { t: 0.4, c: [0xb0, 0x62, 0x24] },
+    { t: 0.72, c: [0x9e, 0x3a, 0x2c] },
     { t: 1, c: [0x7e, 0x24, 0x24] },
   ],
 }
@@ -89,6 +83,11 @@ function loadColor(t: number, dark: boolean): string {
   const u = (v - a.t) / (b.t - a.t || 1)
   const channel = (k: number) => Math.round(a.c[k] + (b.c[k] - a.c[k]) * u)
   return rgbCss([channel(0), channel(1), channel(2)])
+}
+
+/** How hard the overlay paints at a joint. Near zero, only the ink body shows. */
+function heatOpacity(intensity: number): number {
+  return clamp((intensity - 0.05) / 0.55, 0, 1)
 }
 
 /** Catmull-Rom through the spine landmarks, so flexion is actually visible. */
@@ -147,7 +146,7 @@ interface Paint {
   shank: string
   thigh: string
   spine: string
-  /** Arm, neck and head, which carry no joint moment in this model. */
+  /** Arm, neck and head — same ink as the limbs; no separate mute tone. */
   rest: string
 }
 
@@ -202,9 +201,11 @@ function Body({
   // is a hint rather than a real segment and is drawn back accordingly.
   const outOfPlaneArm = exercise === 'squat'
   const armWeight = limb * (outOfPlaneArm ? 0.58 : 0.8)
-  const armOpacity = halo ? 1 : outOfPlaneArm ? 0.45 : 0.92
+  // Same ink opacity as the rest of the skeleton; only the squat's
+  // out-of-plane arm is dialled back so it reads as a hint, not a limb.
+  const armOpacity = halo ? 1 : outOfPlaneArm ? 0.45 : 1
   const footWidth = limb * 0.85 + bump
-  const footOpacity = halo ? 1 : 0.78
+  const footOpacity = 1
 
   return (
     <g fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -394,30 +395,36 @@ export function Figure({
     [loads],
   )
 
+  const heatOp = useMemo(
+    () =>
+      Object.fromEntries(loads.map((l) => [l.key, heatOpacity(l.intensity)])) as Record<
+        JointKey,
+        number
+      >,
+    [loads],
+  )
+
   // A joint that already carries a hotspot does not also need a joint dot: the
   // two marks land on the same pixel and read as one smudge.
   const jointDots = useMemo(() => {
     const handled = new Set(hotspots.map((h) => h.id))
     const dots: { at: Vec2; colour: string }[] = []
-    const tint = (key: JointKey) => (showLoadMap ? heat[key] : 'var(--figure-ink)')
+    const tint = (key: JointKey) =>
+      showLoadMap && heatOp[key] > 0.2 ? heat[key] : 'var(--figure-ink)'
     if (!handled.has('knee')) dots.push({ at: projected.knee, colour: tint('knee') })
     if (!handled.has('hip')) dots.push({ at: projected.hip, colour: tint('hip') })
     // The squat bar sits on the acromion, so marking the shoulder as well
     // would just double up the same dot.
     if (exercise === 'deadlift') {
-      dots.push({
-        at: projected.shoulder,
-        colour: showLoadMap ? 'var(--figure-mute)' : 'var(--figure-ink)',
-      })
+      dots.push({ at: projected.shoulder, colour: 'var(--figure-ink)' })
     }
     return dots
-  }, [hotspots, projected, exercise, showLoadMap, heat])
+  }, [hotspots, projected, exercise, showLoadMap, heat, heatOp])
 
   const shankGradient = `${gradientId}-shank`
   const thighGradient = `${gradientId}-thigh`
   const spineGradient = `${gradientId}-spine`
   const ink = 'var(--figure-ink)'
-  const inkStop = rgbCss(figureInkRgb(darkScheme))
 
   // Where L5/S1 sits along the hip→shoulder axis, for the spine gradient stops.
   const spineL5 = useMemo(() => {
@@ -428,21 +435,34 @@ export function Figure({
     return clamp((toL5.x * axis.x + toL5.y * axis.y) / lengthSq, 0.12, 0.55)
   }, [projected])
 
-  const paint: Paint = showLoadMap
-    ? {
-        foot: heat.ankle,
-        shank: `url(#${shankGradient})`,
-        thigh: `url(#${thighGradient})`,
-        spine: `url(#${spineGradient})`,
-        rest: 'var(--figure-mute)',
-      }
-    : {
-        foot: ink,
-        shank: ink,
-        thigh: ink,
-        spine: ink,
-        rest: ink,
-      }
+  // One ink for the whole skeleton. Heat is a second stroke that fades out
+  // mid-segment, so quiet joints never bleach the body.
+  const paint: Paint = {
+    foot: ink,
+    shank: ink,
+    thigh: ink,
+    spine: ink,
+    rest: ink,
+  }
+
+  const limb = weight
+  const spineW = weight * 1.22
+  const soleY = projected.heel.y
+  const soleContact = { x: projected.ankle.x, y: soleY }
+  const heatPaths = {
+    footSole: `M ${projected.heel.x} ${soleY} L ${projected.toe.x} ${soleY}`,
+    footStem: `M ${projected.ankle.x} ${projected.ankle.y} L ${soleContact.x} ${soleContact.y}`,
+    shank: `M ${projected.ankle.x} ${projected.ankle.y} L ${projected.knee.x} ${projected.knee.y}`,
+    thigh: `M ${projected.knee.x} ${projected.knee.y} L ${projected.hip.x} ${projected.hip.y}`,
+    spine: spinePath([
+      projected.hip,
+      projected.lumbosacral,
+      projected.lumbarApex,
+      projected.thoracolumbar,
+      projected.thoracicApex,
+      projected.shoulder,
+    ]),
+  }
 
   /**
    * Desktop: beside the joint. Phone: docked above the transport so the zoom
@@ -504,8 +524,8 @@ export function Figure({
         <defs>
           {showLoadMap && (
             <>
-              {/* Ends hold the joint colour; the middle falls back to ink so
-                  heat stays local to the articulation. */}
+              {/* Mid-limb stops are transparent: the ink body underneath shows
+                  through, so low demand never turns a segment white. */}
               <linearGradient
                 id={shankGradient}
                 gradientUnits="userSpaceOnUse"
@@ -514,11 +534,11 @@ export function Figure({
                 x2={projected.knee.x}
                 y2={projected.knee.y}
               >
-                <stop offset="0" stopColor={heat.ankle} />
-                <stop offset="0.22" stopColor={heat.ankle} />
-                <stop offset="0.5" stopColor={inkStop} />
-                <stop offset="0.78" stopColor={heat.knee} />
-                <stop offset="1" stopColor={heat.knee} />
+                <stop offset="0" stopColor={heat.ankle} stopOpacity={heatOp.ankle} />
+                <stop offset="0.2" stopColor={heat.ankle} stopOpacity={heatOp.ankle} />
+                <stop offset="0.5" stopColor={heat.ankle} stopOpacity="0" />
+                <stop offset="0.8" stopColor={heat.knee} stopOpacity={heatOp.knee} />
+                <stop offset="1" stopColor={heat.knee} stopOpacity={heatOp.knee} />
               </linearGradient>
               <linearGradient
                 id={thighGradient}
@@ -528,11 +548,11 @@ export function Figure({
                 x2={projected.hip.x}
                 y2={projected.hip.y}
               >
-                <stop offset="0" stopColor={heat.knee} />
-                <stop offset="0.22" stopColor={heat.knee} />
-                <stop offset="0.5" stopColor={inkStop} />
-                <stop offset="0.78" stopColor={heat.hip} />
-                <stop offset="1" stopColor={heat.hip} />
+                <stop offset="0" stopColor={heat.knee} stopOpacity={heatOp.knee} />
+                <stop offset="0.2" stopColor={heat.knee} stopOpacity={heatOp.knee} />
+                <stop offset="0.5" stopColor={heat.knee} stopOpacity="0" />
+                <stop offset="0.8" stopColor={heat.hip} stopOpacity={heatOp.hip} />
+                <stop offset="1" stopColor={heat.hip} stopOpacity={heatOp.hip} />
               </linearGradient>
               <linearGradient
                 id={spineGradient}
@@ -542,12 +562,24 @@ export function Figure({
                 x2={projected.shoulder.x}
                 y2={projected.shoulder.y}
               >
-                <stop offset="0" stopColor={heat.hip} />
-                <stop offset={Math.max(spineL5 - 0.14, 0.04)} stopColor={inkStop} />
-                <stop offset={spineL5} stopColor={heat.l5s1} />
-                <stop offset={Math.min(spineL5 + 0.16, 0.72)} stopColor={heat.l5s1} />
-                <stop offset={Math.min(spineL5 + 0.32, 0.88)} stopColor={inkStop} />
-                <stop offset="1" stopColor={inkStop} />
+                <stop offset="0" stopColor={heat.hip} stopOpacity={heatOp.hip} />
+                <stop
+                  offset={Math.max(spineL5 - 0.12, 0.04)}
+                  stopColor={heat.hip}
+                  stopOpacity="0"
+                />
+                <stop offset={spineL5} stopColor={heat.l5s1} stopOpacity={heatOp.l5s1} />
+                <stop
+                  offset={Math.min(spineL5 + 0.14, 0.7)}
+                  stopColor={heat.l5s1}
+                  stopOpacity={heatOp.l5s1}
+                />
+                <stop
+                  offset={Math.min(spineL5 + 0.28, 0.88)}
+                  stopColor={heat.l5s1}
+                  stopOpacity="0"
+                />
+                <stop offset="1" stopColor={heat.l5s1} stopOpacity="0" />
               </linearGradient>
             </>
           )}
@@ -596,12 +628,12 @@ export function Figure({
           strokeWidth="1.5"
         />
 
-        {/* The load's line of action. In the deadlift it is carried up to the
-            shoulder, because under load the arm is a two-force member and the
-            solver pins the shoulder over the bar: the line makes that visible
-            instead of something you have to take on faith. It stays behind the
-            body, being a faint full-height reference that is not worth
-            punching through the figure. */}
+        {/* The load's line of action. In the deadlift it is carried up past the
+            shoulder, which is where a vertical arm puts it and where a leaning
+            one visibly does not: the line makes the assumption, and any
+            departure from it, something you can see rather than take on faith.
+            It stays behind the body, being a faint full-height reference that is
+            not worth punching through the figure. */}
         {showMomentArms && (
           <line
             x1={barScreenX}
@@ -634,6 +666,26 @@ export function Figure({
           plateScreenRadius={plateRadius * scale}
           jointDots={jointDots}
         />
+
+        {showLoadMap && (
+          <g fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="none">
+            <path
+              d={heatPaths.footSole}
+              stroke={heat.ankle}
+              strokeWidth={limb * 0.85}
+              opacity={0.78 * heatOp.ankle}
+            />
+            <path
+              d={heatPaths.footStem}
+              stroke={heat.ankle}
+              strokeWidth={limb * 0.85}
+              opacity={0.78 * heatOp.ankle}
+            />
+            <path d={heatPaths.shank} stroke={`url(#${shankGradient})`} strokeWidth={limb} />
+            <path d={heatPaths.thigh} stroke={`url(#${thighGradient})`} strokeWidth={limb} />
+            <path d={heatPaths.spine} stroke={`url(#${spineGradient})`} strokeWidth={spineW} />
+          </g>
+        )}
 
         {/* In front of the body, each line carrying a knockout in the stage
             colour underneath it. A dimension line that disappears behind the

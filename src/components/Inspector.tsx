@@ -7,10 +7,8 @@ import {
   paramValue,
   paramsFor,
 } from '../model/interact'
-import type { Frame } from '../model/lift'
 import { PARAM_UI } from './params'
-import { Segmented, Slider } from './ui'
-
+import { Slider } from './ui'
 
 function ParamSlider({
   id,
@@ -61,28 +59,18 @@ export function Inspector({
   hotspot,
   label,
   setup,
-  frame,
   accent,
   onChange,
-  onBalance,
   onClose,
 }: {
   hotspot: HotspotId
   label: string
   setup: Setup
-  frame: Frame
   accent: string
   onChange: (id: ParamId, value: number) => void
-  onBalance: (balance: 'cop' | 'bar') => void
   onClose: () => void
 }) {
   const params = paramsFor(hotspot, setup.exercise)
-  const pinned = setup.task.balance === 'bar'
-  // Where the bar sits and where the pressure falls are one decision: whoever
-  // is not the input is the output, so the control for the output side is
-  // replaced by its readout.
-  const showsBalance =
-    setup.exercise === 'deadlift' && (hotspot === 'bar' || hotspot === 'cop')
 
   return (
     <div className="popover">
@@ -103,44 +91,9 @@ export function Inspector({
         </button>
       </header>
 
-      {showsBalance && (
-        <Segmented
-          value={setup.task.balance}
-          groupId="balance-popover"
-          size="sm"
-          options={[
-            { value: 'cop' as const, label: 'Sobre el pie' },
-            { value: 'bar' as const, label: 'Barra fija' },
-          ]}
-          onChange={onBalance}
-        />
-      )}
-
-      {params.map((id) => {
-        if (id === 'barPosition' && !pinned) {
-          return (
-            <div className="param-locked" key={id}>
-              <span className="slider-label">Respecto al mediopié</span>
-              <span className="slider-value num">
-                {(frame.posture.bar.x * 100).toFixed(1)} cm
-              </span>
-              <p className="caption">La resuelve el equilibrio. Pasá a «Barra fija».</p>
-            </div>
-          )
-        }
-        if (id === 'cop' && pinned) {
-          return (
-            <div className="param-locked" key={id}>
-              <span className="slider-label">Punto de apoyo</span>
-              <span className="slider-value num">
-                {(frame.centreOfPressure * 100).toFixed(1)} cm
-              </span>
-              <p className="caption">Con la barra fija es un resultado, no una entrada.</p>
-            </div>
-          )
-        }
-        return <ParamSlider key={id} id={id} setup={setup} accent={accent} onChange={onChange} />
-      })}
+      {params.map((id) => (
+        <ParamSlider key={id} id={id} setup={setup} accent={accent} onChange={onChange} />
+      ))}
     </div>
   )
 }

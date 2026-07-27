@@ -29,6 +29,12 @@ export const PARAM_UI: Record<ParamId, ParamUi> = {
   },
   kneeTravel: { label: 'Recorrido', scale: 100, step: 1, format: (v) => `${v}%` },
   spineFlexion: { label: 'Flexión', scale: 1, step: 1, format: (v) => `${v}°` },
+  armLean: {
+    label: 'Hombro adelantado',
+    scale: 1,
+    step: 0.5,
+    format: (v) => (v === 0 ? 'vertical' : `${v}°`),
+  },
   barOffset: { label: 'Sobre la espalda', scale: 100, step: 0.5, format: cm },
   foot: { label: 'Largo del pie', scale: 100, step: 0.5, format: cm },
   shank: { label: 'Largo de la tibia', scale: 100, step: 0.5, format: cm },

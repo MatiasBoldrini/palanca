@@ -18,7 +18,9 @@ export const LANDMARK_HEIGHT = {
 
 /** Segment lengths as a fraction of standing height. */
 export const LENGTH_FRACTION = {
-  foot: 0.152,
+  // Slightly under Drillis & Contini (0.152): the sole dominated the stage at
+  // the table value, and foot length is no longer a user control.
+  foot: 0.125,
   shank: LANDMARK_HEIGHT.knee - LANDMARK_HEIGHT.ankle, // 0.246
   thigh: LANDMARK_HEIGHT.trochanter - LANDMARK_HEIGHT.knee, // 0.245
   torso: LANDMARK_HEIGHT.acromion - LANDMARK_HEIGHT.trochanter, // 0.288
@@ -119,11 +121,11 @@ export function anthropometryFromHeight(height: number, mass: number): Anthropom
     thigh: LENGTH_FRACTION.thigh * height,
     torso: LENGTH_FRACTION.torso * height,
     arm: LENGTH_FRACTION.arm * height,
-    maxDorsiflexion: 38,
+    maxDorsiflexion: 35,
   }
 }
 
-export const DEFAULT_ANTHROPOMETRY = anthropometryFromHeight(1.75, 85)
+export const DEFAULT_ANTHROPOMETRY = anthropometryFromHeight(1.75, 80)
 
 /**
  * Standing height implied by the segments, rather than a number set on its own.

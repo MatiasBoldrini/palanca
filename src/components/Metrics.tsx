@@ -1,4 +1,4 @@
-import type { Frame } from '../model/lift'
+import type { ExerciseId, Frame } from '../model/lift'
 
 export interface MetricRow {
   key: string
@@ -18,7 +18,7 @@ const fmt = (v: number, digits: number) => {
   })
 }
 
-export function buildRows(f: Frame): MetricRow[] {
+export function buildRows(f: Frame, exercise: ExerciseId): MetricRow[] {
   const rows: [string, string, string, number, number][] = [
     ['barHeight', 'Altura de la barra', 'cm', 1, f.barHeight * 100],
     ['barX', 'Barra respecto al mediopié', 'cm', 1, f.posture.bar.x * 100],
@@ -35,6 +35,14 @@ export function buildRows(f: Frame): MetricRow[] {
     ['dom', 'Índice rodilla / cadera', '', 2, f.kinetics.kneeDominance],
     ['comp', 'Compresión lumbar estimada', 'N', 0, f.kinetics.lumbarCompression],
   ]
+  // The shoulder only holds anything when the load hangs from the hands, and
+  // only reads non-zero once the arm comes off vertical.
+  if (exercise === 'deadlift') {
+    rows.push(
+      ['shoulderX', 'Hombro por delante de la barra', 'cm', 1, f.kinetics.shoulderMomentArm * 100],
+      ['mShoulder', 'Momento de hombro', 'N·m', 0, f.kinetics.shoulderMoment],
+    )
+  }
   return rows.map(([key, label, unit, digits, value]) => ({ key, label, unit, digits, value }))
 }
 

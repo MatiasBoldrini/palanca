@@ -2,7 +2,7 @@ import { anthropometryFromHeight } from '../model/anthropometry'
 import type { Coordination } from '../model/lift'
 import { useApp } from '../state/appState'
 import { presetsFor } from '../state/presets'
-import { Chip, Collapsible, Section, Segmented, Slider, Switch } from './ui'
+import { Chip, Collapsible, Section, Slider, Switch } from './ui'
 
 const deg = (v: number) => `${v.toFixed(0)}°`
 
@@ -10,9 +10,14 @@ function sameCoordination(a: Coordination, b: Coordination): boolean {
   return (
     Math.abs(a.kneeTravel - b.kneeTravel) < 0.02 &&
     Math.abs(a.spineFlexion - b.spineFlexion) < 0.6 &&
+    Math.abs(a.armLean - b.armLean) < 0.6 &&
     Math.abs(a.barOffset - b.barOffset) < 0.004
   )
 }
+
+/** How far the leaned arm carries the shoulder in front of the bar. */
+const shoulderAhead = (armLean: number, arm: number) =>
+  Math.round(arm * Math.sin((armLean * Math.PI) / 180) * 100)
 
 export function PatternPanel({ accent }: { accent: string }) {
   const { state, dispatch, coordination } = useApp()
@@ -61,6 +66,27 @@ export function PatternPanel({ accent }: { accent: string }) {
           onChange={(v) => dispatch({ type: 'setCoordination', patch: { spineFlexion: v } })}
           hint="0° es la curva natural: lordosis lumbar y cifosis dorsal. Los grados se suman sobre eso — primero se va la lordosis, después redondea la espalda alta."
         />
+        {state.exercise === 'deadlift' && (
+          <Slider
+            label="Brazo fuera de la vertical"
+            value={Math.round(coordination.armLean * 2) / 2}
+            min={0}
+            max={15}
+            step={0.5}
+            accent={accent}
+            format={(v) =>
+              v === 0
+                ? 'vertical'
+                : `${v}° · hombro ${shoulderAhead(v, state.anthro.arm)} cm adelante`
+            }
+            onChange={(v) => dispatch({ type: 'setCoordination', patch: { armLean: v } })}
+            marks={[
+              { at: 0, label: 'tensor' },
+              { at: 15, label: 'hombro adelante' },
+            ]}
+            hint="En 0 el brazo cuelga vertical y no aguanta nada más que tracción, que es lo que pasa con cargas altas. Cada grado adelanta el hombro respecto de la barra y aparece un momento de hombro: la barra sólo puede empujar la mano hacia arriba, así que ese desfase lo sostienen dorsales y hombro posterior."
+          />
+        )}
         {state.exercise === 'squat' && (
           <Slider
             label="Posición de la barra en la espalda"
@@ -89,8 +115,7 @@ export function BodyPanel() {
     Math.abs(scaled.shank - anthro.shank) > 0.002 ||
     Math.abs(scaled.thigh - anthro.thigh) > 0.002 ||
     Math.abs(scaled.torso - anthro.torso) > 0.002 ||
-    Math.abs(scaled.arm - anthro.arm) > 0.002 ||
-    Math.abs(scaled.foot - anthro.foot) > 0.002
+    Math.abs(scaled.arm - anthro.arm) > 0.002
 
   return (
     <>
@@ -126,14 +151,6 @@ export function BodyPanel() {
 
       <Section title="Medidas de segmento">
         <Collapsible title="Ajustar cada segmento">
-        <Slider
-          label="Pie"
-          value={Math.round(anthro.foot * 100)}
-          min={18}
-          max={35}
-          format={(v) => `${v} cm`}
-          onChange={(v) => dispatch({ type: 'setAnthro', patch: { foot: v / 100 } })}
-        />
         <Slider
           label="Tibia (tobillo a rodilla)"
           value={Math.round(anthro.shank * 100)}
@@ -196,24 +213,10 @@ export function TaskPanel() {
         format={(v) => `${v} kg`}
         onChange={(v) => dispatch({ type: 'setTask', patch: { load: v } })}
       />
-      <div className="field">
-        <span className="slider-label">Restricción de equilibrio</span>
-        <Segmented
-          value={task.balance}
-          groupId="balance"
-          size="sm"
-          options={[
-            { value: 'cop', label: 'Equilibrar sobre el pie' },
-            { value: 'bar', label: 'Fijar la barra' },
-          ]}
-          onChange={(balance) => dispatch({ type: 'setBalance', balance })}
-        />
-        <p className="caption">
-          {task.balance === 'cop'
-            ? 'El modelo busca dónde tiene que estar la barra para que el sistema quede equilibrado sobre el punto de apoyo que elijas. Tocá el triángulo bajo el pie para moverlo.'
-            : 'Vos fijás la barra y el modelo te dice dónde cae la presión bajo el pie. Es el protocolo de Edington (2018).'}
-        </p>
-      </div>
+      <p className="caption" style={{ marginTop: 4 }}>
+        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo. Tocá el
+        triángulo bajo el pie para moverlo.
+      </p>
 
       <Collapsible title="Ajuste numérico">
         {exercise === 'squat' && (
@@ -231,34 +234,18 @@ export function TaskPanel() {
             ]}
           />
         )}
-        {task.balance === 'cop' ? (
-          <Slider
-            label="Punto de apoyo"
-            value={Math.round(task.cop * 100)}
-            min={-6}
-            max={6}
-            format={(v) => (v === 0 ? 'mediopié' : `${v > 0 ? '+' : '−'}${Math.abs(v)} cm`)}
-            onChange={(v) => dispatch({ type: 'setTask', patch: { cop: v / 100 } })}
-            marks={[
-              { at: -6, label: 'talón' },
-              { at: 6, label: 'punta' },
-            ]}
-          />
-        ) : (
-          exercise === 'deadlift' && (
-            <Slider
-              label="Posición de la barra"
-              value={Math.round(task.barPosition * 100)}
-              min={-6}
-              max={12}
-              format={(v) =>
-                v === 0 ? 'sobre el mediopié' : `${v > 0 ? '+' : '−'}${Math.abs(v)} cm`
-              }
-              onChange={(v) => dispatch({ type: 'setTask', patch: { barPosition: v / 100 } })}
-              hint="La tibia es un tope: si la pedís más atrás, la barra se queda apoyada contra ella."
-            />
-          )
-        )}
+        <Slider
+          label="Punto de apoyo"
+          value={Math.round(task.cop * 100)}
+          min={-6}
+          max={6}
+          format={(v) => (v === 0 ? 'mediopié' : `${v > 0 ? '+' : '−'}${Math.abs(v)} cm`)}
+          onChange={(v) => dispatch({ type: 'setTask', patch: { cop: v / 100 } })}
+          marks={[
+            { at: -6, label: 'talón' },
+            { at: 6, label: 'punta' },
+          ]}
+        />
       </Collapsible>
     </Section>
   )
@@ -330,9 +317,11 @@ export function ModelNotes() {
         </li>
         {state.exercise === 'deadlift' && (
           <li>
-            Se asume que el brazo cuelga vertical, algo que vale con cargas altas porque el brazo
-            trabaja como tensor. Con cargas livianas el hombro se adelanta y el modelo pierde
-            precisión.
+            El brazo <strong>arranca vertical</strong>, que es lo que hace una carga alta: el brazo
+            trabaja como tensor y el hombro queda sobre la barra. Con cargas livianas el hombro se
+            adelanta, y eso ahora lo movés vos con el control de brazo. No sale gratis: la barra
+            colgando sólo puede empujar la mano hacia arriba, así que cada centímetro de desfase se
+            lo come el hombro, y ese momento se informa aparte.
           </li>
         )}
         <li>

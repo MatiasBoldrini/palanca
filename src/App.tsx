@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { Settings, X } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { Figure } from './components/Figure'
 import {
@@ -53,6 +54,7 @@ function Shell() {
     () => ({
       kneeTravel: coordination.kneeTravel,
       spineFlexion: coordination.spineFlexion,
+      armLean: coordination.armLean,
       barOffset: coordination.barOffset,
       load: task.load,
       cop: task.cop,
@@ -107,6 +109,7 @@ function Shell() {
     () => ({
       kneeTravel: anim.kneeTravel,
       spineFlexion: anim.spineFlexion,
+      armLean: anim.armLean,
       barOffset: anim.barOffset,
     }),
     [anim],
@@ -136,7 +139,7 @@ function Shell() {
   const series = useMemo(
     () => simulateSeries(exercise, solvedAnthro, solvedTask, solvedCoordination, 33),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [seriesKey, anim.kneeTravel, anim.spineFlexion, anim.barOffset],
+    [seriesKey, anim.kneeTravel, anim.spineFlexion, anim.armLean, anim.barOffset],
   )
 
   const peakMoment = useMemo(
@@ -157,7 +160,9 @@ function Shell() {
         const primary = paramsFor(hotspot.id, exercise)[0]
         return {
           ...hotspot,
-          readout: formatParam(primary, paramValue(primary, { exercise, anthro, task, coordination })),
+          readout: primary
+            ? formatParam(primary, paramValue(primary, { exercise, anthro, task, coordination }))
+            : undefined,
         }
       }),
     [exercise, frame, state.showComGuides, anthro, task, coordination],
@@ -213,7 +218,7 @@ function Shell() {
 
   const selectedHotspot = hotspots.find((h) => h.id === selected) ?? null
 
-  const rows = useMemo(() => buildRows(frame), [frame])
+  const rows = useMemo(() => buildRows(frame, exercise), [frame, exercise])
 
   // Mid-transition poses pass through settings the user never chose, so
   // warnings only appear once the springs have caught up with the target.
@@ -297,157 +302,137 @@ function Shell() {
             onClick={() => setPanelOpen(!panelOpen)}
           >
             {panelOpen ? (
-              <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
-                <path
-                  d="M5 5l10 10M15 5 5 15"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <X size={20} strokeWidth={1.75} aria-hidden />
             ) : (
-              <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
-                <path
-                  d="M8.2 3.4h3.6l.4 1.5a5.8 5.8 0 0 1 1.5.9l1.5-.5 1.8 1.8-.5 1.5c.35.47.64.98.9 1.5l1.5.4v3.6l-1.5.4a5.8 5.8 0 0 1-.9 1.5l.5 1.5-1.8 1.8-1.5-.5a5.8 5.8 0 0 1-1.5.9l-.4 1.5H8.2l-.4-1.5a5.8 5.8 0 0 1-1.5-.9l-1.5.5-1.8-1.8.5-1.5a5.8 5.8 0 0 1-.9-1.5l-1.5-.4V9l1.5-.4c.26-.52.55-1 .9-1.5l-.5-1.5L5.3 3.8l1.5.5c.47-.35.98-.64 1.5-.9l.4-1.5Z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.35"
-                  strokeLinejoin="round"
-                />
-                <circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.35" />
-              </svg>
+              <Settings size={20} strokeWidth={1.75} aria-hidden />
             )}
           </button>
         </div>
       </header>
 
-      <main className="stage">
-        <Figure
-          frame={frame}
-          bounds={bounds}
-          exercise={exercise}
-          color={ACCENT}
-          showComGuides={state.showComGuides}
-          showMomentArms={state.showMomentArms}
-          showLoadMap={state.showLoadMap}
-          plateRadius={task.plateRadius}
-          peakMoment={peakMoment}
-          hotspots={state.playing ? [] : hotspots}
-          selected={state.playing ? null : selected}
-          onSelect={setSelected}
-          panel={
-            <MomentPanel
-              series={series}
-              frame={frame}
-              progress={task.progress}
-              curves={state.showCurves}
-            />
-          }
-          popover={
-            selectedHotspot &&
-            !state.playing && (
-              <Inspector
-                hotspot={selectedHotspot.id}
-                label={selectedHotspot.label}
-                setup={setup}
+      <div className="workspace">
+        <main className="stage">
+          <Figure
+            frame={frame}
+            bounds={bounds}
+            exercise={exercise}
+            color={ACCENT}
+            showComGuides={state.showComGuides}
+            showMomentArms={state.showMomentArms}
+            showLoadMap={state.showLoadMap}
+            plateRadius={task.plateRadius}
+            peakMoment={peakMoment}
+            hotspots={state.playing ? [] : hotspots}
+            selected={state.playing ? null : selected}
+            onSelect={setSelected}
+            panel={
+              <MomentPanel
+                series={series}
                 frame={frame}
-                accent={ACCENT}
-                onChange={setParam}
-                onBalance={(balance) => dispatch({ type: 'setBalance', balance })}
-                onClose={() => setSelected(null)}
+                progress={task.progress}
+                curves={state.showCurves}
               />
-            )
-          }
-        >
-          <AnimatePresence>
-            {warnings.length > 0 && (
-              <motion.div
-                className="warnings"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-              >
-                {warnings.map((warning) => (
-                  <p key={warning}>{warning}</p>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Only when there is something to say. The standing invitation to
-              touch the drawing was permanent furniture for a one-time lesson. */}
-          {frame.barBlocked && !selectedHotspot && (
-            <p className="figure-hint">La barra está apoyada contra la tibia: no puede ir más atrás.</p>
-          )}
-
-          <WorkReadout work={series.work} />
-
-          <div className="transport">
-            <button
-              className={state.playing ? 'play playing' : 'play'}
-              aria-label={state.playing ? 'Pausar' : 'Reproducir el recorrido'}
-              onClick={() => {
-                if (!state.playing) setSelected(null)
-                dispatch({ type: 'setPlaying', playing: !state.playing })
-              }}
-            >
-              {state.playing ? (
-                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
-                  <rect x="4" y="3" width="3" height="10" rx="1" fill="currentColor" />
-                  <rect x="9" y="3" width="3" height="10" rx="1" fill="currentColor" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
-                  <path d="M5 3.6v8.8c0 .5.6.9 1.1.6l6.8-4.4a.7.7 0 0 0 0-1.2L6.1 3a.7.7 0 0 0-1.1.6Z" fill="currentColor" />
-                </svg>
-              )}
-            </button>
-            <input
-              className="scrubber"
-              type="range"
-              min={Math.ceil(progressRange.min * 1000)}
-              max={Math.floor(progressRange.max * 1000)}
-              value={Math.round(task.progress * 1000)}
-              aria-label={`Posición del levantamiento — ${EXERCISE_META[exercise].taskConstraint}`}
-              onChange={(e) => {
-                if (state.playing) dispatch({ type: 'setPlaying', playing: false })
-                setProgress(Number(e.target.value) / 1000)
-              }}
-              style={{ '--pct': `${task.progress * 100}%` } as React.CSSProperties}
-            />
-            <span className="transport-value num">
-              {((exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y) * 100).toFixed(
-                0,
-              )}{' '}
-              cm
-            </span>
-          </div>
-        </Figure>
-      </main>
-
-      <AnimatePresence>
-        {panelOpen && (
-          <motion.aside
-            key="settings-panel"
-            className={isDesktop ? 'side-panel' : 'mobile-panel'}
-            initial={
-              isDesktop
-                ? { opacity: 0, x: 36 }
-                : { opacity: 0, y: 28 }
             }
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={
-              isDesktop
-                ? { opacity: 0, x: 28 }
-                : { opacity: 0, y: 20 }
+            popover={
+              selectedHotspot &&
+              !state.playing && (
+                <Inspector
+                  hotspot={selectedHotspot.id}
+                  label={selectedHotspot.label}
+                  setup={setup}
+                  accent={ACCENT}
+                  onChange={setParam}
+                  onClose={() => setSelected(null)}
+                />
+              )
             }
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           >
-            {panels}
-          </motion.aside>
-        )}
-      </AnimatePresence>
+            <AnimatePresence>
+              {warnings.length > 0 && (
+                <motion.div
+                  className="warnings"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                >
+                  {warnings.map((warning) => (
+                    <p key={warning}>{warning}</p>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Only when there is something to say. The standing invitation to
+                touch the drawing was permanent furniture for a one-time lesson. */}
+            {frame.barBlocked && !selectedHotspot && (
+              <p className="figure-hint">
+                La barra está apoyada contra la tibia: no puede ir más atrás.
+              </p>
+            )}
+
+            <WorkReadout work={series.work} />
+
+            <div className="transport">
+              <button
+                className={state.playing ? 'play playing' : 'play'}
+                aria-label={state.playing ? 'Pausar' : 'Reproducir el recorrido'}
+                onClick={() => {
+                  if (!state.playing) setSelected(null)
+                  dispatch({ type: 'setPlaying', playing: !state.playing })
+                }}
+              >
+                {state.playing ? (
+                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
+                    <rect x="4" y="3" width="3" height="10" rx="1" fill="currentColor" />
+                    <rect x="9" y="3" width="3" height="10" rx="1" fill="currentColor" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
+                    <path
+                      d="M5 3.6v8.8c0 .5.6.9 1.1.6l6.8-4.4a.7.7 0 0 0 0-1.2L6.1 3a.7.7 0 0 0-1.1.6Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                )}
+              </button>
+              <input
+                className="scrubber"
+                type="range"
+                min={Math.ceil(progressRange.min * 1000)}
+                max={Math.floor(progressRange.max * 1000)}
+                value={Math.round(task.progress * 1000)}
+                aria-label={`Posición del levantamiento — ${EXERCISE_META[exercise].taskConstraint}`}
+                onChange={(e) => {
+                  if (state.playing) dispatch({ type: 'setPlaying', playing: false })
+                  setProgress(Number(e.target.value) / 1000)
+                }}
+                style={{ '--pct': `${task.progress * 100}%` } as React.CSSProperties}
+              />
+              <span className="transport-value num">
+                {((exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y) * 100).toFixed(
+                  0,
+                )}{' '}
+                cm
+              </span>
+            </div>
+          </Figure>
+        </main>
+
+        <AnimatePresence>
+          {panelOpen && (
+            <motion.aside
+              key="settings-panel"
+              className={isDesktop ? 'side-panel' : 'mobile-panel'}
+              initial={isDesktop ? { opacity: 0, x: 28 } : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={isDesktop ? { opacity: 0, x: 20 } : { opacity: 0, y: 12 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {panels}
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }

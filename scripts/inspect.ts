@@ -18,7 +18,12 @@ const one = (v: number) => v.toFixed(1)
 
 function dumpDeadlift(label: string, kneeTravel: number) {
   const task = { ...DEFAULT_TASK, load: 180, progress: 0 }
-  const f = solveDeadlift(EDINGTON, task, { kneeTravel, spineFlexion: 12, barOffset: 0 })
+  const f = solveDeadlift(EDINGTON, task, {
+    kneeTravel,
+    spineFlexion: 12,
+    armLean: 0,
+    barOffset: 0,
+  })
   console.log(`\n== deadlift ${label} ==`)
   console.log(
     'ankle', cm(f.posture.ankle.x), 'knee', cm(f.posture.knee.x),
@@ -45,8 +50,8 @@ dumpDeadlift('far bar', 1)
 
 const a = anthropometryFromHeight(1.75, 85)
 for (const [label, coord] of [
-  ['high bar', { kneeTravel: 0.8, spineFlexion: 6, barOffset: 0 }],
-  ['low bar', { kneeTravel: 0.2, spineFlexion: 6, barOffset: 0.08 }],
+  ['high bar', { kneeTravel: 0.8, spineFlexion: 6, armLean: 0, barOffset: 0 }],
+  ['low bar', { kneeTravel: 0.2, spineFlexion: 6, armLean: 0, barOffset: 0.08 }],
 ] as const) {
   const task = { ...DEFAULT_TASK, load: 150, progress: 0, depth: 0.55 }
   const f = solveSquat(a, task, coord)
@@ -66,7 +71,27 @@ for (const [label, coord] of [
   console.log('warnings', f.warnings)
 }
 
-const lowBar = { kneeTravel: 0.25, spineFlexion: 8, barOffset: 0.085 }
+console.log('\n== deadlift arm lean, off the floor ==')
+for (const armLean of [0, 3, 6, 10, 15]) {
+  const f = solveDeadlift(
+    EDINGTON,
+    { ...DEFAULT_TASK, load: 180, progress: 0 },
+    { kneeTravel: 0, spineFlexion: 12, armLean, barOffset: 0 },
+  )
+  console.log(
+    `lean=${one(armLean)}`,
+    'shoulder ahead', cm(f.kinetics.shoulderMomentArm),
+    'M shoulder', one(f.kinetics.shoulderMoment),
+    'M hip', one(f.kinetics.moment.hip),
+    'M knee', one(f.kinetics.moment.knee),
+    'M l5s1', one(f.kinetics.moment.l5s1),
+    'trunk', one(f.angles.trunk),
+    'barX', cm(f.posture.bar.x),
+    f.feasible ? '' : 'INFEASIBLE',
+  )
+}
+
+const lowBar = { kneeTravel: 0.25, spineFlexion: 8, armLean: 0, barOffset: 0.085 }
 const squatTask = { ...DEFAULT_TASK, load: 150, depth: 0.5 }
 const series = simulateSeries('squat', a, squatTask, lowBar)
 console.log('\n== squat ascent profile ==')
@@ -84,7 +109,7 @@ for (const p of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
 }
 
 const dlSeries = simulateSeries('deadlift', EDINGTON, { ...DEFAULT_TASK, load: 180 }, {
-  kneeTravel: 0, spineFlexion: 12, barOffset: 0,
+  kneeTravel: 0, spineFlexion: 12, armLean: 0, barOffset: 0,
 })
 console.log('\n== deadlift sticking point ==')
 console.log('peak hip', one(dlSeries.peak.hip), 'at progress', dlSeries.peakHipProgress.toFixed(2))

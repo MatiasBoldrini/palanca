@@ -38,6 +38,16 @@ export interface Coordination {
   kneeTravel: number
   /** Spine flexion relative to neutral, degrees. */
   spineFlexion: number
+  /**
+   * Deadlift only: how far the arm is held off vertical, degrees. Positive
+   * puts the shoulder in front of the bar.
+   *
+   * At 0 the arm is a pure tension member, which is what a heavy pull looks
+   * like: the bar can only push the hand upwards, so anything else has to be
+   * held there by the shoulder. Every degree therefore buys a shoulder moment,
+   * which is why the angle collapses towards 0 as the load goes up.
+   */
+  armLean: number
   /** Squat only: distance from the acromion down the back to the bar, metres. */
   barOffset: number
 }
@@ -94,13 +104,13 @@ export const DEADLIFT_TIBIA = { hipDominant: 8.6, kneeForward: 19.5 } as const
 export const SQUAT_TIBIA = { hipDominant: 22, kneeForward: 42 } as const
 
 export const DEFAULT_COORDINATION: Record<ExerciseId, Coordination> = {
-  deadlift: { kneeTravel: 0, spineFlexion: 10, barOffset: 0 },
-  squat: { kneeTravel: 0.25, spineFlexion: 8, barOffset: 0.05 },
+  deadlift: { kneeTravel: 0, spineFlexion: 10, armLean: 0, barOffset: 0 },
+  squat: { kneeTravel: 0.25, spineFlexion: 8, armLean: 0, barOffset: 0.05 },
 }
 
 export const DEFAULT_TASK: Task = {
   progress: 0,
-  load: 180,
+  load: 100,
   cop: 0,
   plateRadius: 0.225,
   depth: 0.5,
@@ -122,7 +132,8 @@ export const DEFAULT_TASK: Task = {
 const CHAIN_TOLERANCE = 0.006
 
 /**
- * Bar height at lockout: the grip hangs an arm's length below the acromion.
+ * Bar height at lockout: the grip hangs an arm's length below the acromion,
+ * along whatever angle the arm is held at.
  *
  * Derived from the chain rather than from the standing table, because the
  * table assumes an unflexed spine stacked straight over the ankle. The real
@@ -130,7 +141,11 @@ const CHAIN_TOLERANCE = 0.006
  * and asking the links to span more than they have is what makes the chain
  * fail to close at the very top.
  */
-export function deadliftLockoutHeight(a: Anthropometry, spineFlexion: number): number {
+export function deadliftLockoutHeight(
+  a: Anthropometry,
+  spineFlexion: number,
+  armLean: number,
+): number {
   const { ankle } = footPoints(a)
   const standing = rad(standingTibiaAngle(a))
   const knee = {
@@ -139,9 +154,13 @@ export function deadliftLockoutHeight(a: Anthropometry, spineFlexion: number): n
   }
   const reach = a.thigh + buildTrunkShape(a, spineFlexion).chord
   // The standing shin puts the knee over midfoot, and the bar hangs where the
-  // standing body balances, which is also over midfoot: the femur and trunk
-  // therefore stack straight up and span the height on their own.
-  return knee.y + Math.sqrt(Math.max(reach * reach - knee.x * knee.x, 0)) - a.arm
+  // standing body balances, which is also over midfoot. A leaning arm carries
+  // the shoulder forward of both, so the femur and trunk have to span that
+  // offset as well as the height.
+  const lean = rad(armLean)
+  const shoulderX = a.arm * Math.sin(lean)
+  const span = shoulderX - knee.x
+  return knee.y + Math.sqrt(Math.max(reach * reach - span * span, 0)) - a.arm * Math.cos(lean)
 }
 
 /**
@@ -254,7 +273,7 @@ function shinFrontAt(ankle: Vec2, knee: Vec2, height: number): number {
 /** The parts of a deadlift pose that are fixed before the bar is placed. */
 function deadliftFrame(a: Anthropometry, task: Task, coord: Coordination) {
   const { heel, toe, ankle } = footPoints(a)
-  const lockout = deadliftLockoutHeight(a, coord.spineFlexion)
+  const lockout = deadliftLockoutHeight(a, coord.spineFlexion, coord.armLean)
   const barHeight = lerp(task.plateRadius, lockout, task.progress)
   const tibiaAngle = deadliftTibiaAngle(a, task.progress, coord.kneeTravel)
   const knee = add(ankle, fromPolar(rad(90 - tibiaAngle), a.shank))
@@ -287,10 +306,17 @@ export function solveDeadlift(a: Anthropometry, task: Task, coord: Coordination)
 
   let reachable = true
 
+  const lean = rad(coord.armLean)
+
   const build = (barX: number) => {
-    // Under heavy load the arm is a two-force member, so the shoulder sits
-    // directly above the bar.
-    const shoulderTarget = vec(barX, barHeight + a.arm)
+    // At zero lean the arm is a two-force member and the shoulder sits directly
+    // above the bar, which is what a heavy pull does. Leaning it swings the
+    // shoulder forward along the arm's own length; the hand stays on the bar,
+    // so the arm keeps its length and the trunk has to find a new pose.
+    const shoulderTarget = vec(
+      barX + a.arm * Math.sin(lean),
+      barHeight + a.arm * Math.cos(lean),
+    )
     const solved = resolveJoint(knee, a.thigh, shoulderTarget, trunkShape.chord, 'posterior')
     // Only over-extension is rounded off. A folded trunk has no pose at any
     // tolerance, and accepting one leaves the shoulder off the bar.
@@ -336,7 +362,9 @@ export function solveDeadlift(a: Anthropometry, task: Task, coord: Coordination)
   if (barBlocked) barX = barLimit
 
   const { posture, massPoints } = build(barX)
-  const kinetics = computeKinetics(posture, massPoints, task.load, a.mass)
+  const kinetics = computeKinetics(posture, massPoints, task.load, a.mass, {
+    armsCarryLoad: true,
+  })
   const angles = jointAngles(posture)
   const support = { heel: posture.heel.x, toe: posture.toe.x }
 
@@ -423,7 +451,10 @@ export function solveSquat(a: Anthropometry, task: Task, coord: Coordination): F
   const search = findRoot(imbalance, rad(12), rad(100))
   const chordAngle = clamp(search.value, rad(8), rad(104))
   const { posture, massPoints } = build(chordAngle)
-  const kinetics = computeKinetics(posture, massPoints, task.load, a.mass)
+  // The squat bar rides on the back, so the arms hold nothing.
+  const kinetics = computeKinetics(posture, massPoints, task.load, a.mass, {
+    armsCarryLoad: false,
+  })
   const angles = jointAngles(posture)
   const support = { heel: posture.heel.x, toe: posture.toe.x }
 

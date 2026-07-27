@@ -48,6 +48,14 @@ export interface Kinetics {
   comMomentArm: Record<JointKey, number>
   /** |knee moment| / |hip moment|. Above 1 the lift is knee-dominant. */
   kneeDominance: number
+  /**
+   * Shoulder extension demand per shoulder, N.m: what the lats and the
+   * posterior shoulder have to produce to hold the arm off vertical. Zero when
+   * the arms carry nothing, as in the squat.
+   */
+  shoulderMoment: number
+  /** Horizontal distance from the shoulder to the bar, metres. */
+  shoulderMomentArm: number
   /** Estimated L5/S1 compressive force, newtons. */
   lumbarCompression: number
   /** Estimated L5/S1 anterior shear force, newtons. */
@@ -76,6 +84,8 @@ export function computeKinetics(
   bodyPoints: MassPoint[],
   barMass: number,
   bodyMass: number,
+  /** False when the load rests on the body instead of hanging from the hands. */
+  { armsCarryLoad }: { armsCarryLoad: boolean },
 ): Kinetics {
   const byKey = new Map(bodyPoints.map((p) => [p.key, p]))
   const bar: MassPoint = { key: 'bar', position: posture.bar, mass: barMass }
@@ -129,12 +139,32 @@ export function computeKinetics(
   const kneeDominance =
     Math.abs(moment.hip) > 1e-6 ? Math.abs(moment.knee) / Math.abs(moment.hip) : 0
 
+  /*
+   * A hanging bar can only push the hand upwards: whatever horizontal offset
+   * there is between the shoulder and the bar has to be held by the shoulder
+   * itself. So the arm hanging vertical is not an accident of technique, it is
+   * the only free way to hold a load, and this is the price of departing from
+   * it. Split per shoulder, like the other paired joints.
+   */
+  const arms = byKey.get('arms')
+  const shoulderMomentArm = armsCarryLoad ? posture.shoulder.x - posture.bar.x : 0
+  let shoulderMoment = 0
+  if (armsCarryLoad) {
+    shoulderMoment = barMass * GRAVITY * shoulderMomentArm
+    if (arms) {
+      shoulderMoment += arms.mass * GRAVITY * (posture.shoulder.x - arms.position.x)
+    }
+    shoulderMoment *= 0.5
+  }
+
   return {
     moment,
     momentPerKg,
     barMomentArm,
     comMomentArm,
     kneeDominance,
+    shoulderMoment,
+    shoulderMomentArm,
     lumbarCompression,
     lumbarShear,
     com,

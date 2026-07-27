@@ -52,6 +52,7 @@ export type ParamId =
   | 'barPosition'
   | 'kneeTravel'
   | 'spineFlexion'
+  | 'armLean'
   | 'barOffset'
   | 'foot'
   | 'shank'
@@ -94,28 +95,24 @@ const HOTSPOT_LABEL: Record<HotspotId, string> = {
  * Everything the model takes as an input has a place on the drawing: the
  * joints carry the posture and the limbs carry the proportions of the person.
  *
- * Body mass is the exception. It changes every number but has nowhere on a
- * stick figure it could honestly be grabbed, so it stays in the setup panel.
+ * Body mass and bar load are the exceptions: they change every number but
+ * belong in the setup panel, not on a body popup.
  */
 export function hotspotsFor(exercise: ExerciseId, frame: Frame, includeCop: boolean): Hotspot[] {
   const p = frame.posture
   const mid = (a: Vec2, b: Vec2): Vec2 => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
 
+  // Foot length is not a hotspot: it barely changes the lesson and looked
+  // oversized on the drawing even at the low end of its range.
   const limbs: Hotspot[] = [
-    // Matches the drawn foot: sole on the ground, stem up to the ankle. The
-    // old heel→ankle→toe path was a chevron that no longer exists on screen.
-    {
-      id: 'foot',
-      point: mid(p.heel, p.toe),
-      path: [p.heel, { x: p.ankle.x, y: p.heel.y }, p.ankle, { x: p.ankle.x, y: p.heel.y }, p.toe],
-    },
     { id: 'shank', point: mid(p.ankle, p.knee), path: [p.ankle, p.knee] },
     { id: 'thigh', point: mid(p.knee, p.hip), path: [p.knee, p.hip] },
     { id: 'arm', point: p.elbow, path: [p.shoulder, p.elbow, p.hand] },
   ].map((h) => ({ ...h, label: HOTSPOT_LABEL[h.id as HotspotId] }) as Hotspot)
 
+  // Deadlift bar position is solved from the support point — no bar hotspot.
   const joints: HotspotId[] =
-    exercise === 'deadlift' ? ['bar', 'knee', 'spine'] : ['bar', 'knee', 'spine', 'hip']
+    exercise === 'deadlift' ? ['knee', 'spine'] : ['bar', 'knee', 'spine', 'hip']
   if (includeCop) joints.push('cop')
   const jointPoint: Partial<Record<HotspotId, Vec2>> = {
     bar: p.bar,
@@ -136,14 +133,13 @@ export function hotspotsFor(exercise: ExerciseId, frame: Frame, includeCop: bool
 /**
  * Which parameters each part of the drawing stands for, in display order.
  *
- * Height along the lift is deliberately absent from the bar: the transport
- * scrubber is already that control, sitting right below the drawing, and these
- * lists have to stay short enough to float beside a joint.
+ * Load and height along the lift stay out of the bar popup: load lives in the
+ * settings panel, and the transport scrubber already owns progress.
  */
 export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
   switch (hotspot) {
     case 'bar':
-      return exercise === 'deadlift' ? ['load', 'barPosition'] : ['load', 'barOffset']
+      return exercise === 'squat' ? ['barOffset'] : []
     case 'knee':
       return ['kneeTravel']
     case 'spine':
@@ -153,13 +149,13 @@ export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
     case 'cop':
       return ['cop']
     case 'foot':
-      return ['foot', 'dorsiflexion']
+      return []
     case 'shank':
       return ['shank']
     case 'thigh':
       return ['thigh']
     case 'arm':
-      return ['arm']
+      return exercise === 'deadlift' ? ['arm', 'armLean'] : ['arm']
   }
 }
 
@@ -172,6 +168,9 @@ const PARAM_LIMITS: Record<ParamId, Range> = {
   barPosition: { min: -0.06, max: 0.12 },
   kneeTravel: { min: 0, max: 1 },
   spineFlexion: { min: 0, max: 50 },
+  // 15 deg already carries the shoulder some 18 cm in front of the bar, which
+  // is well past anything a loaded pull holds.
+  armLean: { min: 0, max: 15 },
   barOffset: { min: 0, max: 0.14 },
   foot: { min: 0.18, max: 0.35 },
   shank: { min: 0.3, max: 0.6 },
@@ -197,6 +196,8 @@ export function paramValue(id: ParamId, setup: Setup): number {
       return setup.coordination.kneeTravel
     case 'spineFlexion':
       return setup.coordination.spineFlexion
+    case 'armLean':
+      return setup.coordination.armLean
     case 'barOffset':
       return setup.coordination.barOffset
     case 'dorsiflexion':
@@ -226,6 +227,8 @@ export function patchFor(id: ParamId, value: number): SetupPatch {
       return { coordination: { kneeTravel: value } }
     case 'spineFlexion':
       return { coordination: { spineFlexion: value } }
+    case 'armLean':
+      return { coordination: { armLean: value } }
     case 'barOffset':
       return { coordination: { barOffset: value } }
     case 'dorsiflexion':
