@@ -1,0 +1,188 @@
+:root {
+  color-scheme: dark light;
+
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /*
+   * Greyscale plus a single blue. The one hue is spent on two things only:
+   * anything you can act on, and how hard a joint is working. Keeping the
+   * load ramp to a single hue is also the right call for the data — a rainbow
+   * invents categories where there is only magnitude.
+   */
+  --accent: #4f8ff7;
+
+  /*
+   * One hue per joint for the curves legend. Cool, so they stay clear of the
+   * warm heat foci on the figure. The dimension lines (cotas) use --arm-*.
+   */
+  --joint-l5s1: #6eb6ff;
+  --joint-hip: #5fd0c8;
+  --joint-knee: #8aa4ff;
+  --joint-ankle: #c09bff;
+
+  /* Dimension lines on the figure — cool greys/blues, never warm like the load map. */
+  --arm-l5s1: #8ec8ff;
+  --arm-hip: #7ad4cc;
+  --arm-knee: #a8b8ff;
+  --arm-ankle: #cbb0ff;
+
+  /* One solid canvas colour for page, stage and raised surfaces. */
+  --bg: #0c0c0e;
+  --bg-raise: #0c0c0e;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-strong: rgba(255, 255, 255, 0.11);
+  --surface-solid: #0c0c0e;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+  --text: rgba(255, 255, 255, 0.94);
+  --text-2: rgba(255, 255, 255, 0.6);
+  --text-3: rgba(255, 255, 255, 0.38);
+  --shadow-lift: 0 24px 60px rgba(0, 0, 0, 0.6);
+  --stage: #0c0c0e;
+  --grid: rgba(255, 255, 255, 0.06);
+  /* Same as the canvas: strokes knock out against it. */
+  --figure-halo: #0c0c0e;
+  --figure-ink: rgba(255, 255, 255, 0.82);
+  /* Parts of the body the model computes no joint moment for. Kept fainter
+     than the bottom of the load ramp, so "nothing to say" never reads as
+     "barely loaded". */
+  --figure-mute: rgba(255, 255, 255, 0.22);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --accent: #1f6feb;
+
+    --joint-l5s1: #1a6fbf;
+    --joint-hip: #0f8a82;
+    --joint-knee: #3d5ccc;
+    --joint-ankle: #6b3db8;
+
+    --arm-l5s1: #1f78c8;
+    --arm-hip: #148f86;
+    --arm-knee: #4a66d4;
+    --arm-ankle: #7440c4;
+
+    --bg: #f4f4f6;
+    --bg-raise: #ffffff;
+    --surface: rgba(0, 0, 0, 0.045);
+    --surface-strong: #ffffff;
+    --surface-solid: #ffffff;
+    --hairline: rgba(0, 0, 0, 0.1);
+    --hairline-strong: rgba(0, 0, 0, 0.18);
+    --text: rgba(0, 0, 0, 0.9);
+    --text-2: rgba(0, 0, 0, 0.58);
+    --text-3: rgba(0, 0, 0, 0.4);
+    --shadow-lift: 0 18px 44px rgba(0, 0, 0, 0.16);
+    --stage: #ffffff;
+    --grid: rgba(0, 0, 0, 0.06);
+    --figure-halo: #ffffff;
+    --figure-ink: rgba(0, 0, 0, 0.78);
+    --figure-mute: rgba(0, 0, 0, 0.15);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto,
+    system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.title-lg {
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.022em;
+}
+
+.title-sm {
+  font-size: 15px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.caption {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .blur {
+    backdrop-filter: saturate(180%) blur(28px);
+    -webkit-backdrop-filter: saturate(180%) blur(28px);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

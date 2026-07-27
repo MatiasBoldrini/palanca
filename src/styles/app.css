@@ -1,0 +1,1003 @@
+/* ---------------------------------------------------------------- shell -- */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'brand share' 'tabs tabs';
+  align-items: center;
+  gap: 10px;
+  padding: calc(var(--safe-top) + 12px) 16px 12px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.topbar .brand {
+  grid-area: brand;
+}
+
+.topbar-actions {
+  grid-area: share;
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button.on {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.topbar-tabs {
+  grid-area: tabs;
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent);
+}
+
+.brand h1 {
+  line-height: 1.1;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  letter-spacing: 0.01em;
+}
+
+.icon-button {
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  font-size: 13px;
+  font-weight: 590;
+  color: var(--text-2);
+  transition: background 0.18s var(--ease-out), color 0.18s var(--ease-out);
+}
+
+.icon-button:active {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.ghost-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-2);
+  transition: color 0.18s var(--ease-out);
+}
+
+.ghost-icon:hover,
+.ghost-icon.on {
+  color: var(--text);
+}
+
+.ghost-icon:active {
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- stage -- */
+
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px 8px;
+  min-height: 0;
+}
+
+/* The one container on the screen. Everything that used to sit in its own
+   boxed card below the drawing now lives inside this frame. */
+.figure {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 260px;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+}
+
+/* Mobile: the drawing is the app. No sheet, no reserved footer. */
+.app.mobile {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app.mobile .stage {
+  flex: 1;
+  padding: 0;
+  min-height: 0;
+  opacity: 1;
+  transition: opacity 0.28s var(--ease-out);
+}
+
+.app.mobile .figure {
+  border-radius: 0;
+  min-height: 0;
+}
+
+.app.mobile.panel-open .stage {
+  flex: 0 0 0;
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  padding: 0;
+}
+
+.mobile-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 16px calc(var(--safe-bottom) + 28px);
+  background: var(--bg);
+  will-change: transform, opacity;
+}
+
+.side-panel {
+  will-change: transform, opacity;
+}
+
+.share-in-panel {
+  margin-bottom: 12px;
+}
+
+.figure-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px calc(12px + var(--safe-bottom));
+  /* Gaps between the controls stay part of the drawing, so a tap there still
+     dismisses the selection. */
+  pointer-events: none;
+}
+
+.figure-controls > * {
+  pointer-events: auto;
+}
+
+.figure-hint {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-3);
+  padding: 4px 0;
+}
+
+.figure-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ----------------------------------------------------------- load map --- */
+
+.fig-spot {
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fig-spot-mark {
+  opacity: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.16s var(--ease-out), transform 0.16s var(--ease-out);
+}
+
+/* Held back until you go looking, so nine targets do not read as clutter. */
+.fig-spot-mark.limb {
+  opacity: 0.45;
+}
+
+.fig-spot:hover .fig-spot-mark,
+.fig-spot:focus-visible .fig-spot-mark,
+.fig-spot.active .fig-spot-mark {
+  opacity: 1;
+}
+
+.fig-spot:hover .fig-spot-mark,
+.fig-spot:focus-visible .fig-spot-mark {
+  transform: scale(1.2);
+}
+
+/* Lights up the part itself, not just the marker, so it is obvious what you
+   are about to adjust before you commit to touching it. */
+.fig-spot-halo {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s var(--ease-out);
+}
+
+.fig-spot:hover .fig-spot-halo,
+.fig-spot:active .fig-spot-halo {
+  opacity: 0.16;
+}
+
+.fig-spot:focus-visible .fig-spot-halo {
+  opacity: 0.22;
+}
+
+.fig-spot.active .fig-spot-halo {
+  opacity: 0.26;
+}
+
+.fig-spot-tag {
+  font-size: 11px;
+  font-weight: 590;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s var(--ease-out);
+}
+
+/* Not while it is selected: the popover is already saying all of this, right
+   on top of where the tag would land. */
+.fig-spot:hover .fig-spot-tag,
+.fig-spot:focus-visible .fig-spot-tag {
+  opacity: 1;
+}
+
+.fig-spot.active .fig-spot-tag {
+  opacity: 0;
+}
+
+/* -------------------------------------------------------------- popover -- */
+
+.popover-layer {
+  position: absolute;
+  z-index: 5;
+}
+
+.popover-layer.docked {
+  z-index: 6;
+}
+
+.popover-layer.docked .popover {
+  width: 100%;
+}
+
+/* While editing on a phone the curves and the work figure step aside so the
+   zoom can keep the body in view above the docked slider. */
+.figure.focus-edit .figure-panel,
+.figure.focus-edit .work-readout {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s var(--ease-out);
+}
+
+.figure.focus-edit .work-readout {
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.figure .figure-panel {
+  transition: opacity 0.28s var(--ease-out);
+}
+
+/* A floating layer over a busy drawing does need a surface to stay legible,
+   so it gets one: blur and a shadow, but no outline, so it reads as something
+   hovering rather than as another panel. */
+.popover {
+  width: 236px;
+  padding: 8px 12px 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--stage) 84%, transparent);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .popover {
+    backdrop-filter: saturate(160%) blur(16px);
+    -webkit-backdrop-filter: saturate(160%) blur(16px);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .popover {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.popover-title {
+  font-size: 12px;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.popover-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -4px;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+
+.popover-close:hover {
+  color: var(--text);
+}
+
+.popover .slider {
+  padding: 1px 0 2px;
+}
+
+.popover .slider-label,
+.popover .slider-value {
+  font-size: 12.5px;
+}
+
+.popover input[type='range'] {
+  height: 24px;
+}
+
+.param-locked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  padding: 4px 0 2px;
+}
+
+.param-locked .slider-label,
+.param-locked .slider-value {
+  font-size: 12.5px;
+}
+
+.param-locked .slider-value {
+  text-align: right;
+}
+
+.param-locked .caption {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-3);
+}
+
+.figure-note {
+  font-size: 10px;
+  font-weight: 560;
+  opacity: 0.8;
+}
+
+.figure-panel {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  pointer-events: none;
+}
+
+.app.mobile .figure-panel {
+  top: 8px;
+  left: 10px;
+}
+
+.warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+/* Against captions in --text-3, full-contrast text at weight is loud enough
+   to read as a warning without spending a second hue on it. */
+.warnings p {
+  font-size: 12.5px;
+  font-weight: 590;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- curves -- */
+
+.moment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Title of the column, and the one plain-language line in the whole drawing.
+   It sets the column's width, which is why it is allowed to wrap: the charts
+   are narrow on purpose and whatever this takes comes out of the drawing. */
+.moment-headline {
+  max-width: 126px;
+  margin-bottom: 3px;
+  font-size: 11.5px;
+  font-weight: 620;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+.moment-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.moment-chart span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+.moment-panel.narrow {
+  gap: 5px;
+}
+
+.moment-panel.narrow .moment-chart span {
+  font-size: 9px;
+}
+
+.moment-chart svg {
+  display: block;
+}
+
+/* ------------------------------------------------------------ transport -- */
+
+/* One row: a quiet button, a hairline to drag along, and the reading. The
+   filled disc and the second line of labels underneath were the loudest thing
+   left on a screen that is otherwise flat. */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.play {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  background: var(--surface);
+  transition: transform 0.18s var(--ease-out), background 0.2s var(--ease-out),
+    color 0.2s var(--ease-out);
+}
+
+.play:hover {
+  background: var(--surface-strong);
+}
+
+.play:active {
+  transform: scale(0.9);
+}
+
+.play.playing {
+  background: var(--accent);
+  color: #fff;
+}
+
+.transport .scrubber {
+  flex: 1;
+  min-width: 0;
+}
+
+.transport-value {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* -------------------------------------------------------------- sliders -- */
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* A thin rail and a small solid handle in the accent. The heavy white puck it
+   replaces was the last skeuomorphic thing on the screen, and it read as a
+   form control rather than as part of the drawing. */
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent-local, var(--accent)) var(--pct, 50%),
+    var(--hairline-strong) var(--pct, 50%)
+  );
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent-local, var(--accent));
+  transition: transform 0.16s var(--ease-out);
+}
+
+input[type='range']:hover::-webkit-slider-thumb,
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+
+input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hairline-strong);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent-local, var(--accent));
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-local, var(--accent));
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--r-xs);
+}
+
+.slider {
+  position: relative;
+  padding: 2px 0 4px;
+}
+
+.slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.slider-label {
+  font-size: 14.5px;
+  font-weight: 520;
+  color: var(--text);
+}
+
+.slider-value {
+  font-size: 14px;
+  font-weight: 620;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.slider-marks {
+  position: relative;
+  height: 13px;
+  margin-top: -3px;
+}
+
+.slider-marks span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.slider-marks span:first-child {
+  transform: none;
+}
+
+.slider-marks span:last-child {
+  transform: translateX(-100%);
+}
+
+.slider-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------- controls -- */
+
+/* The track alone carries the affordance; outlining it as well turns every
+   control into another box. */
+.segmented {
+  position: relative;
+  display: flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+}
+
+.segment {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: var(--r-full);
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s var(--ease-out);
+}
+
+.segmented.sm .segment {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.segment.active {
+  color: var(--text);
+}
+
+.segment-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-full);
+  background: var(--surface-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.segment-text {
+  position: relative;
+  z-index: 1;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 9px 0;
+  text-align: left;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.switch-label {
+  font-size: 14.5px;
+  font-weight: 520;
+}
+
+.switch-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+.switch {
+  flex: none;
+  width: 50px;
+  height: 30px;
+  border-radius: var(--r-full);
+  background: var(--hairline-strong);
+  padding: 2px;
+  display: flex;
+  justify-content: flex-start;
+  transition: background 0.25s var(--ease-out);
+}
+
+.switch.on {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+
+.switch-knob {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+.chip {
+  padding: 7px 13px;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  transition: all 0.18s var(--ease-out);
+}
+
+.chip.active {
+  color: var(--chip-accent, var(--accent));
+  border-color: color-mix(in srgb, var(--chip-accent, var(--accent)) 55%, transparent);
+  background: color-mix(in srgb, var(--chip-accent, var(--accent)) 14%, transparent);
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.text-button {
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--accent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 4px 0;
+}
+
+/* ------------------------------------------------------------- summary -- */
+
+.work-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0 4px;
+  pointer-events: none;
+}
+
+.work-readout span {
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+
+.work-readout b {
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------- sections -- */
+
+.section {
+  padding: 16px 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  min-height: 22px;
+}
+
+.section-head .switch-row {
+  width: auto;
+  padding: 0;
+}
+
+.pattern-blurb {
+  margin-bottom: 2px;
+}
+
+.collapsible {
+  margin-top: 6px;
+}
+
+.collapsible-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 0 8px;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--text-2);
+}
+
+.collapsible-head svg {
+  transition: transform 0.2s var(--ease-out);
+}
+
+.collapsible.open .collapsible-head svg {
+  transform: rotate(180deg);
+}
+
+.collapsible-body {
+  padding-bottom: 6px;
+}
+
+.notes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.notes li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.notes strong {
+  color: var(--text);
+  font-weight: 620;
+}
+
+.foot {
+  padding: 18px 0 6px;
+}
+
+/* -------------------------------------------------------------- metrics -- */
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+}
+
+.metrics-row span:not(:first-child) {
+  text-align: right;
+}
+
+.metrics-label {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+
+.metrics-label em {
+  font-style: normal;
+  color: var(--text-3);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.metrics-value {
+  font-size: 14px;
+  font-weight: 570;
+}
+
+/* ---------------------------------------------------------------- chart -- */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-tick {
+  font-size: 9.5px;
+  fill: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-caption {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* -------------------------------------------------------------- desktop -- */
+
+@media (min-width: 940px) {
+  .app.desktop {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app.desktop.panel-open {
+    grid-template-columns: minmax(0, 1fr) 430px;
+  }
+
+  .app.desktop .topbar {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas: 'brand tabs share';
+    gap: 20px;
+    padding: 14px 24px;
+  }
+
+  .app.desktop .topbar-tabs {
+    width: 320px;
+  }
+
+  .app.desktop .topbar-actions {
+    justify-self: end;
+  }
+
+  .app.desktop .stage {
+    padding: 20px 12px 20px 24px;
+    overflow: hidden;
+  }
+
+  .app.desktop .figure {
+    min-height: 0;
+  }
+
+  .side-panel {
+    overflow-y: auto;
+    padding: 18px 24px 40px;
+  }
+
+}
