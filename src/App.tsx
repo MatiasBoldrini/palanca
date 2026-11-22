@@ -1,15 +1,5 @@
 import { MotionConfig } from 'motion/react'
-import {
-  Activity,
-  Bone,
-  Box,
-  ChartSpline,
-  Hand,
-  Layers3,
-  SlidersHorizontal,
-  Spline,
-  Weight,
-} from 'lucide-react'
+import { Bone, Box, ChartSpline, Hand, Layers3, Spline } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import type { MuscleId } from './anatomy/body'
 import { LiftTransport } from './components/LiftTransport'
@@ -27,8 +17,13 @@ import {
 } from './components/ControlPanel'
 import { Inspector } from './components/Inspector'
 import { MetricsTable, buildRows } from './components/Metrics'
+import { LabHeader, ExerciseHeading, LabFooter } from './components/LabHeader'
+import { BenchLab } from './components/BenchLab'
+import { ForceBalance, MechanicsControls } from './components/MechanicsControls'
+import { buildMechanicsOverlay, formatBarArm, formatMoment } from './model/mechanicsOverlay'
+import type { JointKey } from './model/kinetics'
 import { MomentPanel } from './components/MomentPanel'
-import { Collapsible, Segmented } from './components/ui'
+import { Collapsible } from './components/ui'
 import { usePlayback, useSpringSnapshot } from './hooks/useAnimationEngine'
 import { clamp } from './model/geometry'
 import {
@@ -51,11 +46,12 @@ import './styles/base.css'
 import './styles/app.css'
 
 import './styles/atlas.css'
+import './styles/mechanics.css'
 
 const AnatomyViewer = lazy(() => import('./components/AnatomyViewer'))
 const ACCENT = 'var(--accent)'
 
-function Shell() {
+function StandingLab() {
   const { state, dispatch, coordination } = useApp()
   const share = useShareLink()
   const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
@@ -194,6 +190,21 @@ function Shell() {
     [series],
   )
 
+  const mechanics = state.mechanics
+  const overlay = useMemo(
+    () => buildMechanicsOverlay(frame, solvedTask, exercise, solvedAnthro.height),
+    [frame, solvedTask, exercise, solvedAnthro.height],
+  )
+  const focus = overlay.moments.find((j) => j.id === mechanics.joint)
+  const observed =
+    focus ?? overlay.moments.find((j) => j.id === (exercise === 'deadlift' ? 'hip' : 'knee'))!
+  const selectJoint = useCallback(
+    (joint: JointKey | 'all') => {
+      dispatch({ type: 'setMechanics', patch: { joint, moments: true } })
+    },
+    [dispatch],
+  )
+
   // Each part carries what it currently reads, so hovering it can say what it
   // is and where it stands before you commit to opening anything.
   const hotspots = useMemo(() => {
@@ -318,51 +329,17 @@ function Shell() {
 
   return (
     <div className="atlas-app">
-      <header className="atlas-header">
-        <div className="atlas-header-inner">
-          <div className="atlas-brand">
-            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="32" height="32" />
-            <strong>Palanca</strong>
-            <span>Laboratorio de biomecánica</span>
-          </div>
-          <nav aria-label="Ejercicio">
-            <Segmented
-              value={exercise}
-              groupId="exercise"
-              panelId="exercise-panel"
-              options={[
-                { value: 'deadlift', label: 'Peso muerto' },
-                { value: 'squat', label: 'Sentadilla' },
-              ]}
-              onChange={(value) => {
-                if (exercise === value) return
-                setSelected(null)
-                dispatch({ type: 'setExercise', exercise: value })
-              }}
-            />
-          </nav>
-          <button className="settings-open" onClick={openSettings} aria-haspopup="dialog">
-            <SlidersHorizontal size={16} aria-hidden /> Ajustes
-          </button>
-        </div>
-      </header>
+      <LabHeader onSettings={openSettings} onSwitch={() => setSelected(null)} />
       <main className="atlas-main">
-        <header className="exercise-head">
-          <div>
-            <h1>{EXERCISE_META[exercise].name}</h1>
-            <p>
-              {exercise === 'deadlift'
-                ? 'Seguí la barra desde el suelo y observá cómo se extienden la cadera y las rodillas.'
-                : 'Seguí el descenso de la cadera y la extensión de las rodillas al volver a subir.'}
-            </p>
-          </div>
-          <div className="bar-load">
-            <Weight size={19} strokeWidth={1.5} aria-hidden />
-            <span>
-              Carga en barra<strong className="num">{task.load.toLocaleString('es-AR')} kg</strong>
-            </span>
-          </div>
-        </header>
+        <ExerciseHeading
+          name={EXERCISE_META[exercise].name}
+          load={task.load}
+          description={
+            exercise === 'deadlift'
+              ? 'Compará la palanca de la barra sobre la cadera en el despegue y en el bloqueo.'
+              : 'Seguí la línea de la barra y compará el giro de cadera y rodilla al descender.'
+          }
+        />
         <div
           className="atlas-layout"
           id="exercise-panel"
@@ -403,6 +380,22 @@ function Shell() {
                   </label>
                 )}
               </div>
+              {mode === 'anatomy' && (
+                <MechanicsControls<JointKey>
+                  {...mechanics}
+                  options={overlay.moments}
+                  onForces={() =>
+                    dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                  }
+                  onMoments={() =>
+                    dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                  }
+                  onLever={() =>
+                    dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                  }
+                  onJoint={selectJoint}
+                />
+              )}
               {unavailable && (
                 <p className="fallback-note" role="status">
                   El visor 3D no pudo iniciarse. Podés explorar el mismo movimiento en el diagrama o
@@ -442,6 +435,10 @@ function Shell() {
                         anthro={solvedAnthro}
                         task={solvedTask}
                         layer={layer}
+                        mechanics={mechanics}
+                        jointPeaks={series.peak}
+                        peakMoment={peakMoment}
+                        onSelectJoint={selectJoint}
                         selectedMuscle={muscle}
                         onSelectMuscle={setMuscle}
                         onUnavailable={useDiagramFallback}
@@ -479,8 +476,9 @@ function Shell() {
                 )}
               </div>
               <LiftTransport
-                exercise={exercise}
-                frame={frame}
+                marker={exercise === 'deadlift' ? 'Barra' : 'Cadera'}
+                height={exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y}
+                lowerStop={exercise === 'deadlift' ? 'Despegue' : 'Fondo'}
                 progress={task.progress}
                 range={progressRange}
                 playing={state.playing}
@@ -496,6 +494,12 @@ function Shell() {
                   setProgress(value)
                 }}
               />
+              <p className="pose-explanation">
+                <strong>{observed.label}.</strong> La vertical de la barra pasa a{' '}
+                <b>{formatBarArm(observed.barArmM)}</b> de la articulación. El peso de la barra
+                aporta <b>{formatMoment(observed.barMomentNm)}</b>
+                {observed.id === 'l5s1' ? ' al tronco' : ' por pierna'}.
+              </p>
               {mode === 'diagram' && (
                 <p className="diagram-help">
                   Tocá una articulación o un segmento para ajustar el modelo.
@@ -534,6 +538,59 @@ function Shell() {
             </dl>
           </div>
           <aside className="atlas-rail" aria-label="Guía del movimiento">
+            <section className="atlas-card moments-card" aria-labelledby="moment-title">
+              <h2 id="moment-title" className="rail-title">
+                <ChartSpline size={18} aria-hidden /> Momentos articulares
+              </h2>
+              <p className="rail-intro moment-intro">
+                Los arcos muestran el momento interno que equilibra la postura. Elegí una
+                articulación para medir su distancia a la línea de la barra.
+              </p>
+              <MomentPanel
+                series={series}
+                frame={frame}
+                progress={task.progress}
+                curves={state.showCurves}
+                selected={mechanics.joint}
+                onSelectJoint={(joint) => {
+                  selectJoint(joint)
+                  if (!unavailable) setMode('anatomy')
+                }}
+              />
+              {focus && (
+                <div className="joint-detail">
+                  <strong>
+                    {focus.label} · {focus.action}
+                  </strong>
+                  <dl>
+                    <div>
+                      <dt>Brazo de la barra</dt>
+                      <dd>{formatBarArm(focus.barArmM)}</dd>
+                    </div>
+                    <div>
+                      <dt>Aporte de la barra</dt>
+                      <dd>{formatMoment(focus.barMomentNm)}</dd>
+                    </div>
+                    <div>
+                      <dt>Aporte de los segmentos</dt>
+                      <dd>{formatMoment(focus.bodyMomentNm)}</dd>
+                    </div>
+                  </dl>
+                  <p>
+                    El momento neto suma ambos aportes. El signo positivo indica{' '}
+                    {focus.id === 'ankle' ? 'flexión plantar' : 'extensión'}.
+                  </p>
+                </div>
+              )}
+            </section>
+            <ForceBalance
+              forces={overlay.forces}
+              note={
+                exercise === 'deadlift'
+                  ? 'En el despegue, el modelo supone que las manos ya sostienen todo el peso de la barra.'
+                  : 'La reacción total bajo ambos pies equilibra el peso del cuerpo y el de la barra.'
+              }
+            />
             <MuscleAtlas
               frame={frame}
               exercise={exercise}
@@ -545,40 +602,20 @@ function Shell() {
                   : undefined
               }
             />
-            <section className="atlas-card moments-card" aria-labelledby="moment-title">
-              <h2 id="moment-title" className="rail-title">
-                <ChartSpline size={18} aria-hidden /> Momentos articulares
-              </h2>
-              <p className="rail-intro moment-intro">
-                El momento expresa el efecto de giro de las fuerzas sobre cada articulación.
-              </p>
-              <MomentPanel
-                series={series}
-                frame={frame}
-                progress={task.progress}
-                curves={state.showCurves}
-              />
-            </section>
           </aside>
         </div>
-        <footer className="atlas-footer">
-          <span>
-            <Activity size={15} aria-hidden /> Modelo biomecánico plano y cuasiestático.
-          </span>
-          <a
-            href={`${import.meta.env.BASE_URL}anatomy/creditos.html`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Créditos del atlas 3D
-          </a>
-        </footer>
+        <LabFooter />
       </main>
       <SettingsDialog open={panelOpen} onClose={() => setPanelOpen(false)}>
         {panels}
       </SettingsDialog>
     </div>
   )
+}
+
+function Shell() {
+  const { state } = useApp()
+  return state.benchActive ? <BenchLab /> : <StandingLab />
 }
 
 export default function App() {

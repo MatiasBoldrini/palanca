@@ -1,23 +1,28 @@
 # Palanca
 
-Laboratorio interactivo de **peso muerto y sentadilla**. Explorá el cuerpo en 3D durante una repetición y pasá al diagrama lateral para estudiar la misma postura, sus palancas y sus momentos articulares. Funciona en el navegador.
+Laboratorio interactivo de **peso muerto, press de banca y sentadilla**. Girá el cuerpo en 3D y seguí las fuerzas, los momentos articulares y los brazos de palanca durante cada repetición.
 
-![Vista anatómica del peso muerto en Palanca](docs/peso-muerto.png)
+![Fuerzas y momentos en el despegue del peso muerto](docs/peso-muerto.png)
 
 ## Explorar un levantamiento
 
-1. Elegí un ejercicio y reproducí una repetición. Podés pausarla, arrastrar el control de recorrido o tocar **1×** para verla a media velocidad.
-2. Girá el modelo o elegí una vista anterior, posterior o de perfil. En el selector de capa podés pasar de **Músculos** a **Esqueleto**. Con el foco en el visor, las flechas giran la cámara, `+` y `−` ajustan el zoom e `Inicio` recupera el encuadre.
-3. Seleccioná un músculo en el cuerpo o uno de los ocho grupos del **Atlas muscular**. La ficha explica su función y propone qué observar durante el ejercicio.
-4. En **Diagrama 2D**, tocá una articulación o un segmento para modificar la postura. En **Ajustes** podés cambiar carga, proporciones, coordinación y guías, o copiar un enlace a la posición.
+1. Elegí un ejercicio y usá los botones bajo el recorrido para comparar la posición baja, la mitad y el bloqueo. También podés reproducir la repetición, pausarla o verla a media velocidad.
+2. **Fuerzas** dibuja flechas rectas desde el punto de aplicación. El peso corporal y el de la barra apuntan hacia abajo. En los levantamientos de pie, la reacción total del suelo apunta hacia arriba. En banca se distinguen el apoyo del banco y el de los pies.
+3. **Momentos** dibuja arcos alrededor de cada articulación. Su sentido indica el giro interno necesario para equilibrar la postura. Elegí una articulación para aislarla y mostrar la distancia perpendicular a la vertical de la carga.
+4. En **Press de banca**, pausá en el pecho, seleccioná el hombro y variá el ancho de agarre. La vista desde los pies permite ver la separación lateral entre la mano y el hombro. Las curvas muestran la magnitud del momento total de cada articulación por brazo.
+5. Cambiá entre músculos y esqueleto o abrí el diagrama 2D en la misma postura. En **Ajustes** podés editar la carga o copiar un enlace a la posición con sus capas de biomecánica.
 
-![Sentadilla con el atlas anatómico](docs/sentadilla.png)
+![Press de banca con las fuerzas y momentos sobre la anatomía](docs/banca.png)
 
 ## Cómo interpretar los valores
 
-Los huesos y tejidos acompañan los puntos de un modelo sagital cuasiestático. El resaltado muscular permite identificar estructuras. Los números expresan momentos articulares netos en N·m, ángulos y trabajo mecánico del ascenso en J. Los momentos de cadera, rodilla y tobillo se muestran por pierna. L5/S1 corresponde al tronco completo. La activación individual de cada músculo queda fuera del cálculo.
+El modelo equilibra cada postura con fuerzas verticales y expresa la demanda interna en N·m. En peso muerto y sentadilla, los momentos de cadera, rodilla y tobillo corresponden a una pierna. L5/S1 corresponde al tronco completo. Seleccionar una articulación muestra la contribución de la barra y de los segmentos corporales. En el despegue del peso muerto, las manos sostienen toda la carga.
 
-Las mallas anatómicas se sirven junto con la aplicación. Si falla WebGL o la carga de un recurso 3D, sigue disponible el simulador lateral. Ver [fuentes y licencias de los modelos](public/anatomy/creditos.html).
+En banca cada mano sostiene la mitad del peso de la barra. El modelo usa un apoyo vertical equivalente bajo los hombros y otro entre los pies. Las mediciones de un press real también incluyen aceleración y fuerzas horizontales que varían con el agarre. [Larsen y colaboradores (2021)](https://pubmed.ncbi.nlm.nih.gov/33554113/)
+
+El color muscular ilustra la demanda relativa de la articulación asociada en distintos puntos del recorrido. La fuerza de cada músculo y su activación eléctrica requieren información adicional. Las mallas se sirven junto con la aplicación y el diagrama 2D sigue disponible si falla WebGL. [Fuentes y licencias del atlas](public/anatomy/creditos.html)
+
+![Sentadilla con la palanca de la rodilla](docs/sentadilla.png)
 
 ## Desarrollo y verificación
 

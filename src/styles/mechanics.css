@@ -1,0 +1,244 @@
+.mechanics-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  padding: 8px clamp(10px, 1.5vw, 20px);
+  border-bottom: 1px solid var(--rule);
+}
+.mechanics-toggles,
+.joint-picker,
+.mechanics-tools button,
+.phase-stops {
+  display: flex;
+  align-items: center;
+}
+.mechanics-toggles {
+  gap: 5px;
+}
+.mechanics-tools button,
+.phase-stops button {
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 580;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  min-height: 31px;
+  padding: 4px 8px;
+}
+.mechanics-tools .force-toggle[aria-pressed='true'] {
+  color: #265787;
+  border-color: #9aafc7;
+  background: #ecf2f7;
+}
+.mechanics-tools .moment-toggle[aria-pressed='true'] {
+  color: #694580;
+  border-color: #baa8c3;
+  background: #f4edf7;
+}
+.mechanics-tools .lever-toggle[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--soft);
+}
+.joint-picker {
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.joint-picker select {
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  background: var(--card);
+  max-width: 125px;
+  min-height: 30px;
+}
+.phase-stops {
+  gap: 4px;
+  padding: 0 18px 12px;
+  justify-content: center;
+}
+.phase-stops button {
+  min-height: 27px;
+  font-weight: 500;
+  padding-inline: 11px;
+}
+.phase-stops button[aria-pressed='true'],
+.phase-stops button:hover {
+  color: var(--ink);
+  background: var(--soft);
+}
+.atlas-viewport .model-hint {
+  top: auto;
+  bottom: 16px;
+  color: #5b564c;
+}
+.moments-card button.moment-chart {
+  width: 100%;
+  text-align: left;
+  border-radius: 2px;
+}
+.moments-card button.moment-chart:hover,
+.moments-card button.moment-chart[aria-pressed='true'] {
+  background: var(--soft);
+}
+.moments-card button.moment-chart[aria-pressed='true'] .moment-label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.joint-detail {
+  margin-top: 12px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+}
+.joint-detail dl,
+.force-readings {
+  margin: 8px 0;
+}
+.joint-detail dl div,
+.force-readings div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px;
+  padding-block: 3px;
+}
+.joint-detail dt,
+.joint-detail p {
+  color: var(--muted);
+}
+.joint-detail p {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.joint-detail dd,
+.force-readings dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.force-readings div {
+  font-size: 13px;
+  border-bottom: 1px solid var(--rule);
+  padding-block: 6px;
+}
+.force-readings dt span {
+  display: inline-block;
+  text-align: center;
+  width: 18px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.force-bar dt span {
+  color: #416aa6;
+}
+.force-body dt span {
+  color: var(--muscle-ink);
+}
+.force-ground dt span,
+.force-bench dt span {
+  color: #14816e;
+}
+.force-feet dt span {
+  color: #587b30;
+}
+.bench-diagram {
+  display: flex;
+  flex-flow: column;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  background: #f8f6f0;
+  color: #2d3632;
+}
+.bench-diagram svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.bench-diagram .diagram-plane {
+  margin: 5px;
+  align-self: flex-end;
+  background: #fbfaf6;
+  color: #373c38;
+  border: 1px solid #d6d1c5;
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 12px;
+}
+.color-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.demand-scale {
+  display: inline-block;
+  margin-right: 6px;
+  height: 6px;
+  width: 32px;
+  border-radius: 4px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, #dcbbae, #ac4b31);
+}
+@media (max-width: 600px) {
+  .mechanics-tools {
+    gap: 4px 6px;
+    padding: 5px 7px;
+  }
+  .mechanics-tools button {
+    padding-inline: 5px;
+  }
+  .joint-picker > span {
+    position: absolute;
+    clip-path: inset(50%);
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+  .atlas-viewport .model-hint {
+    left: 8px;
+    bottom: 14px;
+    font-size: 11px;
+  }
+  .atlas-viewport .model-hint svg {
+    display: none;
+  }
+  .atlas-header .segment {
+    padding-inline: 5px;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 400px) {
+  .atlas-viewport .model-hint {
+    max-width: 95px;
+    line-height: 1.12;
+  }
+  .model-hint button {
+    flex-wrap: wrap;
+    gap: 0;
+    line-height: 1.1;
+    padding: 3px 5px;
+  }
+  .atlas-viewport {
+    min-height: 365px;
+  }
+}
+.bench-grip {
+  padding: 13px 20px;
+}
+.bench-grip .slider {
+  margin: 0;
+}
+.pose-explanation {
+  margin: 0;
+  padding: 11px clamp(12px, 2vw, 24px);
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pose-explanation strong, .pose-explanation b { color: var(--ink); font-weight: 600 }

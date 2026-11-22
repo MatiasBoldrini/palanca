@@ -2,7 +2,7 @@
   "name": "palanca",
   "private": true,
   "version": "0.1.0",
-  "description": "Simulador interactivo de la mecánica del peso muerto y la sentadilla",
+  "description": "Simulador interactivo de la mecánica del peso muerto, el press de banca y la sentadilla",
   "type": "module",
   "scripts": {
     "dev": "vite",

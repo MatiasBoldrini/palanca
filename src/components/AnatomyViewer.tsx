@@ -3,6 +3,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createAnatomicalBody, type MuscleId } from '../anatomy/body'
+import { createMechanicsDrawing, FORCE_LENGTH_IN_HEIGHTS } from '../anatomy/mechanicsDrawing'
+import type { MechanicsView } from '../model/mechanicsOverlay'
+import type { JointKey } from '../model/kinetics'
 import type { Anthropometry } from '../model/anthropometry'
 import type { Vec2 } from '../model/geometry'
 import type { Bounds, ExerciseId, Frame, Task } from '../model/lift'
@@ -14,6 +17,10 @@ interface Props {
   anthro: Anthropometry
   exercise: ExerciseId
   task: Task
+  mechanics: MechanicsView
+  peakMoment: number
+  jointPeaks: Record<JointKey, number>
+  onSelectJoint: (id: JointKey) => void
   playing?: boolean
   bounds?: Bounds
   postures?: readonly Posture[]
@@ -168,6 +175,7 @@ function createStudio(
   const floor = studioFloor()
   scene.add(floor.root)
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 25)
+  const drawing = createMechanicsDrawing(host, (id) => data().onSelectJoint(id))
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = false
   controls.enablePan = false
@@ -189,6 +197,7 @@ function createStudio(
   let fittedScale = 0
   let fittedRadius = 0
   let fittedLoad = 0
+  let fittedForceRatio = -1
   const sweep = { left: 0, right: 0, top: 0, bottom: 0 }
   const ray = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
@@ -215,7 +224,7 @@ function createStudio(
   } | null = null
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-  function fit({ frame, anthro, task, bounds, postures }: Props) {
+  function fit({ frame, anthro, task, bounds, postures, mechanics }: Props) {
     direction.subVectors(camera.position, controls.target).normalize()
     right.crossVectors(camera.up, direction).normalize()
     up.crossVectors(direction, right).normalize()
@@ -236,6 +245,7 @@ function createStudio(
       top = Math.max(top, vertical + dy)
     }
     const h = anthro.height
+    const forceRatio = mechanics.forces ? task.load / (task.load + anthro.mass) : 0
     function includePose(p: Posture) {
       include(p.headTop, h * 0.055, 0.025)
       include(p.shoulder, h * 0.145, h * 0.06)
@@ -246,6 +256,8 @@ function createStudio(
       include(p.heel, h * 0.13, 0.025)
       include(p.toe, h * 0.13, 0.02)
       include(p.bar, 0.89, 0.02)
+      if (forceRatio)
+        include({ x: p.bar.x, y: p.bar.y - h * FORCE_LENGTH_IN_HEIGHTS * forceRatio }, 0, 0.02)
       if (task.load > 20) include(p.bar, 0.78, task.plateRadius * 1.02, true)
     }
     includePose(frame.posture)
@@ -256,6 +268,7 @@ function createStudio(
       direction.distanceToSquared(fittedDirection) > 1e-10 ||
       fittedScale !== h ||
       fittedRadius !== task.plateRadius ||
+      fittedForceRatio !== forceRatio ||
       fittedLoad !== task.load
     ) {
       for (const p of postures ?? []) includePose(p)
@@ -270,6 +283,7 @@ function createStudio(
       fittedScale = h
       fittedRadius = task.plateRadius
       fittedLoad = task.load
+      fittedForceRatio = forceRatio
       fittedDirection.copy(direction)
     }
     // One physical scale throughout the lift. A mild vertical follow keeps
@@ -355,6 +369,15 @@ function createStudio(
       }
       pickedMuscle = null
     }
+    if (
+      next.layer === 'muscles' &&
+      (posed?.frame !== next.frame ||
+        posed?.jointPeaks !== next.jointPeaks ||
+        posed?.layer !== next.layer ||
+        posed?.selectedMuscle !== next.selectedMuscle)
+    ) {
+      body.drawDemand(next.frame.kinetics.moment, next.jointPeaks, next.selectedMuscle)
+    }
     posed = next
     if (turn) {
       const t = reducedMotion.matches ? 1 : Math.min(1, (performance.now() - turn.start) / 360)
@@ -366,6 +389,7 @@ function createStudio(
     }
     fit(next)
     renderer.render(scene, camera)
+    drawing.draw(next, camera, width, height)
   }
 
   function invalidate() {
@@ -589,6 +613,7 @@ function createStudio(
       controls.removeEventListener('change', change)
       controls.removeEventListener('start', cancelTurn)
       controls.dispose()
+      drawing.dispose()
       body?.dispose()
       scene.traverse((part) => {
         if (part instanceof THREE.DirectionalLight) part.shadow.dispose()

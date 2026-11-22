@@ -18,6 +18,7 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { Anthropometry } from '../model/anthropometry'
 import type { ExerciseId, Frame, Task } from '../model/lift'
+import type { JointKey } from '../model/kinetics'
 import { createBarbell } from './barbell'
 import { createRig } from './rig'
 
@@ -62,6 +63,28 @@ const baseColor: Record<Tissue, number> = {
 }
 const contextColor = new Color(0xb89e92)
 const selectedColor = new Color(0xf08756)
+const demandColor = new Color(0xff4220)
+const demandGlow = new Color(0x541706)
+
+// These groups share a mechanical action. The inverse model resolves the
+// joint moment, so its tint can illustrate that action but not individual
+// muscle tension, co-contraction or neural activation.
+function muscleDemand(moment: Record<JointKey, number>, peak: Record<JointKey, number>) {
+  function relative(joint: JointKey, sign = 1) {
+    return Math.min(1, Math.max(0, sign * moment[joint] / Math.max(1, peak[joint])))
+  }
+  const hip = relative('hip')
+  return {
+    glutes: hip,
+    quadriceps: relative('knee'),
+    hamstrings: Math.max(hip, relative('knee', -1)),
+    erectors: relative('l5s1'),
+    calves: relative('ankle'),
+    core: relative('l5s1', -1),
+    lats: 0,
+    upperBody: 0,
+  }
+}
 
 export async function createAnatomicalBody() {
   const loader = new GLTFLoader()
@@ -129,12 +152,24 @@ export async function createAnatomicalBody() {
   }
   return {
     root,
+    barbell,
     update(frame: Frame, anthro: Anthropometry, task: Task, exercise: ExerciseId) {
       updatePose(frame.posture, anthro, exercise)
       barbell.update(frame.posture.bar, task.plateRadius, task.load, exercise)
       root.updateMatrixWorld(true)
       // Picking can occur before the renderer's next scheduled frame.
       for (const skeleton of skeletons) skeleton.update()
+    },
+    drawDemand(moment: Record<JointKey, number>, peak: Record<JointKey, number>, selected: MuscleId | null) {
+      const demand = muscleDemand(moment, peak)
+      for (const { material, tissue, muscle } of surfaces) {
+        if (tissue !== 'muscle' || !muscle || (selected && selected !== muscle)) continue
+        const intensity = demand[muscle]
+        if (selected) material.color.copy(selectedColor)
+        else material.color.setHex(baseColor.muscle)
+        material.color.lerp(demandColor, intensity * 0.83)
+        material.emissive.setHex(selected ? 0x381306 : 0).lerp(demandGlow, intensity * 0.85)
+      }
     },
     style(layer: AnatomyLayer, selected: MuscleId | null) {
       for (const { mesh, material, tissue, muscle } of surfaces) {

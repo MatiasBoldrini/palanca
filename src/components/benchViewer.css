@@ -1,0 +1,24 @@
+.bench-label-surface {
+  position: absolute;
+  inset: 0 0 51px;
+  pointer-events: none;
+}
+.bench-viewer .anatomy-surface {
+  bottom: 51px;
+}
+.bench-arm-value {
+  font: 650 12px var(--font-sans, sans-serif);
+  fill: #574768;
+  stroke: #fffaf1;
+  stroke-width: 3px;
+  paint-order: stroke;
+  text-anchor: middle;
+}
+@media (max-width: 400px) {
+  .bench-annotations .mechanics-label-name {
+    font-size: 10px;
+  }
+  .bench-annotations .mechanics-label-value {
+    font-size: 12px;
+  }
+}

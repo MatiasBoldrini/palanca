@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useMediaQuery } from './useMediaQuery'
 import { repetitionStart, repetitionPose, type PlaybackPhase as MovementPhase } from '../model/repetition'
-import type { ExerciseId } from '../model/lift'
+import type { RepetitionExercise } from '../model/repetition'
 
 export type PlaybackPhase = MovementPhase | 'idle'
 
@@ -120,7 +120,7 @@ export function useSpringSnapshot<T extends NumericSnapshot>(
 }
 
 interface PlaybackCursor {
-  exercise: ExerciseId
+  exercise: RepetitionExercise
   min: number
   max: number
   time: number
@@ -135,7 +135,7 @@ export function usePlayback(
   onStop: () => void,
   { min, max } = { min: 0, max: 1 },
   cycleSeconds = 7,
-  exercise: ExerciseId = 'deadlift',
+  exercise: RepetitionExercise = 'deadlift',
 ): PlaybackPhase {
   const cursor = useRef<PlaybackCursor | null>(null)
   const latest = useRef({ progress, onChange, onStop })

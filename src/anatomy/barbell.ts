@@ -87,7 +87,7 @@ export function createBarbell() {
   })
   return {
     root,
-    update(at: Vec2, radius: number, load: number, exercise: ExerciseId) {
+    update(at: Vec2, radius: number, load: number, exercise: ExerciseId | 'bench') {
       loadedBar.position.set(at.x, at.y, 0)
       for (const block of blocks) {
         block.visible = load <= 20 && exercise === 'deadlift'

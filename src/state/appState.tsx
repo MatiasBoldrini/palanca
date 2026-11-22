@@ -14,15 +14,22 @@ import {
   heightFromSegments,
 } from '../model/anthropometry'
 import { nearestFeasibleProgress, type SetupPatch } from '../model/interact'
-import {
-  type Coordination,
-  DEFAULT_TASK,
-  type ExerciseId,
-  type Task,
-} from '../model/lift'
+import { type Coordination, DEFAULT_TASK, type ExerciseId, type Task } from '../model/lift'
+import type { MechanicsView } from '../model/mechanicsOverlay'
+import { BENCH_GRIP, type BenchJointId } from '../model/bench'
 import { DEADLIFT_PRESETS, SQUAT_PRESETS } from './presets'
 
+export type LiftId = ExerciseId | 'bench'
+interface BenchSettings {
+  progress: number
+  gripRatio: number
+  joint: BenchJointId | 'all'
+}
+
 export interface AppState {
+  benchActive: boolean
+  bench: BenchSettings
+  mechanics: MechanicsView
   exercise: ExerciseId
   anthro: Anthropometry
   task: Task
@@ -35,6 +42,9 @@ export interface AppState {
 }
 
 const initialState: AppState = {
+  benchActive: false,
+  bench: { progress: 1, gripRatio: 1.5, joint: 'all' },
+  mechanics: { forces: true, moments: true, lever: true, joint: 'all' },
   exercise: 'deadlift',
   anthro: DEFAULT_ANTHROPOMETRY,
   task: DEFAULT_TASK,
@@ -52,7 +62,7 @@ const initialState: AppState = {
 export type ViewFlag = 'showComGuides' | 'showMomentArms' | 'showLoadMap' | 'showCurves'
 
 export type Action =
-  | { type: 'setExercise'; exercise: ExerciseId }
+  | { type: 'setExercise'; exercise: LiftId }
   | { type: 'setTask'; patch: Partial<Task> }
   | { type: 'setAnthro'; patch: Partial<Anthropometry> }
   | { type: 'resetProportions' }
@@ -61,6 +71,8 @@ export type Action =
   | { type: 'setPlaying'; playing: boolean }
   | { type: 'toggle'; key: ViewFlag }
   | { type: 'hydrate'; state: Partial<AppState> }
+  | { type: 'setMechanics'; patch: Partial<MechanicsView> }
+  | { type: 'setBench'; patch: Partial<BenchSettings> }
   | { type: 'reset' }
 
 /** Height follows the segments, so it can never contradict them. */
@@ -80,8 +92,11 @@ function withCoordination(state: AppState, patch: Partial<Coordination>): AppSta
 }
 
 function alignProgress(state: AppState): AppState {
+  if (state.benchActive) return state
   const progress = nearestFeasibleProgress({
-    exercise: state.exercise, task: state.task, anthro: state.anthro,
+    exercise: state.exercise,
+    task: state.task,
+    anthro: state.anthro,
     coordination: state.coordination[state.exercise],
   })
   if (progress === null || progress === state.task.progress) return state
@@ -91,9 +106,11 @@ function alignProgress(state: AppState): AppState {
 function reduceState(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'setExercise':
-      if (state.exercise === action.exercise) return state
+      if (action.exercise === 'bench') return { ...state, benchActive: true, playing: false }
+      if (!state.benchActive && state.exercise === action.exercise) return state
       return {
         ...state,
+        benchActive: false,
         exercise: action.exercise,
         playing: false,
         task: { ...state.task, progress: action.exercise === 'squat' ? 1 : 0 },
@@ -105,7 +122,11 @@ function reduceState(state: AppState, action: Action): AppState {
         task: { ...state.task, ...action.patch, balance: 'cop' },
       }
     case 'setAnthro':
-      return { ...state, playing: false, anthro: withDerivedHeight({ ...state.anthro, ...action.patch }) }
+      return {
+        ...state,
+        playing: false,
+        anthro: withDerivedHeight({ ...state.anthro, ...action.patch }),
+      }
     case 'resetProportions': {
       // Back to the table's proportions for the height the segments currently
       // imply, keeping the mass and mobility the user set.
@@ -128,10 +149,16 @@ function reduceState(state: AppState, action: Action): AppState {
       if (action.patch.task) {
         next = { ...next, task: { ...next.task, ...action.patch.task, balance: 'cop' } }
       }
-      return action.patch.coordination
-        ? withCoordination(next, action.patch.coordination)
-        : next
+      return action.patch.coordination ? withCoordination(next, action.patch.coordination) : next
     }
+    case 'setMechanics':
+      return { ...state, mechanics: { ...state.mechanics, ...action.patch } }
+    case 'setBench':
+      return {
+        ...state,
+        bench: { ...state.bench, ...action.patch },
+        playing: state.playing && action.patch.gripRatio === undefined,
+      }
     case 'setPlaying':
       return { ...state, playing: action.playing }
     case 'toggle':
@@ -147,7 +174,14 @@ function reduceState(state: AppState, action: Action): AppState {
 
 function reducer(state: AppState, action: Action): AppState {
   const next = reduceState(state, action)
-  if (state === next || action.type === 'setPlaying' || action.type === 'toggle') return next
+  if (
+    state === next ||
+    action.type === 'setPlaying' ||
+    action.type === 'toggle' ||
+    action.type === 'setMechanics' ||
+    action.type === 'setBench'
+  )
+    return next
   // Scrubbing and RAF updates already use the current feasible range.
   if (action.type === 'setTask' && Object.keys(action.patch).every((key) => key === 'progress')) {
     return next
@@ -168,7 +202,10 @@ const round = (v: number, digits = 3) => Number(v.toFixed(digits))
 function encode(state: AppState): string {
   const c = state.coordination[state.exercise]
   const payload = {
-    e: state.exercise === 'deadlift' ? 0 : 1,
+    e: state.benchActive ? 2 : state.exercise === 'deadlift' ? 0 : 1,
+    standing: state.exercise,
+    b: [round(state.bench.progress), round(state.bench.gripRatio), state.bench.joint],
+    m: state.mechanics,
     h: round(state.anthro.height),
     w: round(state.anthro.mass, 1),
     sg: round(state.anthro.shank),
@@ -197,7 +234,8 @@ function encode(state: AppState): string {
 function decode(hash: string): Partial<AppState> | null {
   try {
     const p = JSON.parse(decodeURIComponent(atob(hash)))
-    const exercise: ExerciseId = p.e === 1 ? 'squat' : 'deadlift'
+    const exercise: ExerciseId =
+      p.e === 1 || (p.e === 2 && p.standing === 'squat') ? 'squat' : 'deadlift'
     const anthro: Anthropometry = {
       height: p.h,
       mass: p.w,
@@ -208,7 +246,25 @@ function decode(hash: string): Partial<AppState> | null {
       arm: p.ar,
       maxDorsiflexion: p.df,
     }
+    const mechanics = p.m ?? {}
+    const bench = Array.isArray(p.b) ? p.b : []
     return {
+      benchActive: p.e === 2,
+      bench: {
+        progress: Number.isFinite(bench[0])
+          ? Math.max(0, Math.min(1, bench[0]))
+          : initialState.bench.progress,
+        gripRatio: Number.isFinite(bench[1])
+          ? Math.max(BENCH_GRIP.min, Math.min(BENCH_GRIP.max, bench[1]))
+          : initialState.bench.gripRatio,
+        joint: ['shoulder', 'elbow', 'wrist'].includes(bench[2]) ? bench[2] : 'all',
+      },
+      mechanics: {
+        forces: mechanics.forces !== false,
+        moments: mechanics.moments !== false,
+        lever: mechanics.lever !== false,
+        joint: ['l5s1', 'hip', 'knee', 'ankle'].includes(mechanics.joint) ? mechanics.joint : 'all',
+      },
       exercise,
       anthro,
       task: {

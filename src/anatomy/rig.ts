@@ -1,6 +1,7 @@
 import { Bone, Matrix4, Vector3 } from 'three'
 import type { Anthropometry } from '../model/anthropometry'
 import type { Vec2 } from '../model/geometry'
+import { jointLateralOffset } from '../model/jointLandmarks'
 import type { ExerciseId } from '../model/lift'
 import type { Posture } from '../model/posture'
 
@@ -62,6 +63,8 @@ function limbLinks(mirror: number) {
 }
 const sides = [limbLinks(1), limbLinks(-1)]
 
+export { axial as restSpine, sides as restLimbs }
+
 export function createRig(bones: Bone[]) {
   const byName = new Map<string, Bone[]>()
   for (const bone of bones) {
@@ -96,9 +99,9 @@ export function createRig(bones: Bone[]) {
     const squat = exercise === 'squat'
     for (const ref of sides) {
       const lateral = -ref.mirror * scale
-      const ankle = world(p.ankle, lateral * (squat ? 0.151 : 0.115))
-      const knee = world(p.knee, lateral * (squat ? 0.147 : 0.109))
-      const hip = world(p.hip, lateral * 0.08)
+      const ankle = world(p.ankle, -ref.mirror * jointLateralOffset('ankle', exercise, a.height))
+      const knee = world(p.knee, -ref.mirror * jointLateralOffset('knee', exercise, a.height))
+      const hip = world(p.hip, -ref.mirror * jointLateralOffset('hip', exercise, a.height))
       const shoulder = world(p.shoulder, lateral * 0.162)
       const elbow = world(p.elbow, lateral * (squat ? 0.357 : 0.201))
       const grip = world(p.hand, lateral * (squat ? 0.35 : 0.218))
