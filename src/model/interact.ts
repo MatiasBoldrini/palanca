@@ -137,37 +137,6 @@ export function hotspotsFor(exercise: ExerciseId, frame: Frame, includeCop: bool
   ]
 }
 
-/**
- * Which parameters each part of the drawing stands for, in display order.
- *
- * Load and height along the lift stay out of the bar popup: load lives in the
- * settings panel, and the transport scrubber already owns progress.
- */
-export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
-  switch (hotspot) {
-    case 'bar':
-      return exercise === 'squat' ? ['barOffset'] : []
-    case 'knee':
-      return ['kneeTravel']
-    case 'spine':
-      return ['spineFlexion', 'torso']
-    case 'hip':
-      return ['depth']
-    case 'cop':
-      return ['cop']
-    case 'foot':
-      return []
-    case 'ankle':
-      return ['dorsiflexion']
-    case 'shank':
-      return ['shank']
-    case 'thigh':
-      return ['thigh']
-    case 'arm':
-      return exercise === 'deadlift' ? ['arm', 'armLean'] : ['arm']
-  }
-}
-
 /** The atlas also exposes load on the plates, foot length and ankle mobility. */
 export function editableHotspotsFor(exercise: ExerciseId, frame: Frame): Hotspot[] {
   const spots = hotspotsFor(exercise, frame, true)

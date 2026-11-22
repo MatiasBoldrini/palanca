@@ -63,10 +63,19 @@ const baseColor: Record<Tissue, number> = {
 const contextColor = new Color(0xb89e92)
 const selectedColor = new Color(0xf08756)
 
-export async function createAnatomicalBody() {
+export async function createAnatomicalBody(signal: AbortSignal) {
+  // Both GLBs are self-contained. Finish the cancellable transfer before allocating
+  // geometry, so a lost context or a rapid exercise change doesn't build an unused atlas.
+  const buffers = await Promise.all(
+    ['bodyparts3d', 'z-anatomy'].map(async (name) => {
+      const response = await fetch(atlasURL(name), { signal })
+      if (!response.ok) throw new Error(`No se pudo cargar ${name} (HTTP ${response.status})`)
+      return response.arrayBuffer()
+    }),
+  )
+  if (signal.aborted) throw new DOMException('Carga cancelada', 'AbortError')
   const loader = new GLTFLoader()
-  const requests = ['bodyparts3d', 'z-anatomy'].map((name) => loader.loadAsync(atlasURL(name)))
-  const results = await Promise.allSettled(requests)
+  const results = await Promise.allSettled(buffers.map((buffer) => loader.parseAsync(buffer, '')))
   const root = new Group()
   const barbell = createBarbell()
   root.add(barbell.root)

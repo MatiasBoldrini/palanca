@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react'
 
-/** The biomechanical diagram remains usable if the optional 3D chunk fails to load. */
+/** Let the stage remount the renderer while the lab keeps its current pose. */
 export class ViewerBoundary extends Component<
   { children: ReactNode; onUnavailable: () => void },
   { failed: boolean }

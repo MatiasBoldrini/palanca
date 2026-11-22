@@ -1,6 +1,7 @@
 import { CameraMenu } from './CameraMenu'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ACESFilmicToneMapping, SRGBColorSpace, WebGLRenderer } from 'three'
+import type { WebGLRenderer } from 'three'
+import { createAtlasRenderer } from '../anatomy/atlasRenderer'
 import { createAnatomicalBody, type AnatomyLayer } from '../anatomy/body'
 import {
   BENCH_CAMERAS,
@@ -57,6 +58,7 @@ export function BenchViewer(props: Props) {
   useEffect(() => {
     const el = host.current
     if (!el) return
+    const loading = new AbortController()
     let live = true,
       renderer: WebGLRenderer | undefined
     const fail = (e?: Event) => {
@@ -65,11 +67,7 @@ export function BenchViewer(props: Props) {
     }
     const tick = requestAnimationFrame(async () => {
       try {
-        renderer = new WebGLRenderer({ antialias: true, powerPreference: 'low-power' })
-        renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5))
-        renderer.outputColorSpace = SRGBColorSpace
-        renderer.toneMapping = ACESFilmicToneMapping
-        renderer.toneMappingExposure = 1.02
+        renderer = createAtlasRenderer(1.5, 1.02)
         const canvas = renderer.domElement
         canvas.tabIndex = 0
         canvas.setAttribute('role', 'img')
@@ -92,7 +90,7 @@ export function BenchViewer(props: Props) {
           },
         )
         studio.current = runtime
-        const body = await createAnatomicalBody()
+        const body = await createAnatomicalBody(loading.signal)
         if (!live) {
           body.dispose()
           return
@@ -105,6 +103,7 @@ export function BenchViewer(props: Props) {
     })
     return () => {
       live = false
+      loading.abort()
       cancelAnimationFrame(tick)
       studio.current?.dispose()
       studio.current = null

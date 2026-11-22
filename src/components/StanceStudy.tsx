@@ -14,7 +14,7 @@ import {
 import { defaultStanceWidth, getStance, stanceWidthRange } from '../model/stance'
 import { Slider } from './ui'
 import { ControlDisclosure } from './ControlDisclosure'
-import { StanceProfiles } from './StanceProfiles'
+import { formatBarArm } from '../model/mechanicsOverlay'
 import './StanceStudy.css'
 
 interface SetupProps {
@@ -26,43 +26,6 @@ interface SetupProps {
 function wideSquat(anthro: Anthropometry) {
   const { min, max } = stanceWidthRange('squat', anthro)
   return clamp(1.6 * defaultStanceWidth('squat', anthro.height), min, max)
-}
-
-function StanceFootprint({
-  width,
-  turnout,
-  height,
-}: {
-  width: number
-  turnout: number
-  height: number
-}) {
-  // Ground plan in units of stature so the same horizontal scale spans both deadlift styles.
-  const separation = (width * 161) / height
-  return (
-    <svg
-      className="stance-footprint"
-      viewBox="0 0 126 66"
-      role="img"
-      aria-label={`Vista superior, centros de los pies separados ${Math.round(width * 100)} centímetros, pies girados ${Math.round(turnout)} grados hacia afuera`}
-    >
-      <path className="footprint-midline" d="M63 2V64" />
-      <path className="footprint-measure" d={`M${63 - separation / 2} 34H${63 + separation / 2}`} />
-      {[-1, 1].map((side) => (
-        <g
-          key={side}
-          transform={`translate(${63 + (side * separation) / 2} 34) rotate(${turnout * side}) scale(${side} 1)`}
-        >
-          <path
-            className="footprint-sole"
-            transform="translate(0 9)"
-            d="M-4 2C-5-3-2-8-4-12C-6-17-5-24-1-26C2-28 6-23 6-17C7-11 4-5 4 1C4 7-3 9-4 2Z"
-          />
-          <circle r="1.7" fill="#fffaf1" />
-        </g>
-      ))}
-    </svg>
-  )
 }
 
 export function StanceControls({
@@ -122,7 +85,6 @@ export function StanceControls({
             ))}
           </div>
           <div className="stance-width-panel">
-            <StanceFootprint width={stance.width} turnout={stance.toeOut} height={anthro.height} />
             <div className="stance-width-input">
               <Slider
                 label="Separación entre los pies"
@@ -144,6 +106,7 @@ export function StanceControls({
 
 interface ComparisonProps extends SetupProps {
   frame: Frame
+  onUseStance: (stance: Partial<Coordination>, progress: number) => void
   onJoint: (joint: 'hip' | 'knee') => void
   series: Series
   range: Range
@@ -161,26 +124,29 @@ export function StanceComparison({
   progress,
   task,
   onJoint,
+  onUseStance,
 }: ComparisonProps) {
   const alternative = useMemo(() => {
     const normal = defaultStanceWidth(exercise, anthro.height)
     const style = coordination.deadliftStyle ?? 'conventional'
     const standard =
-      (exercise === 'squat' || style === 'conventional') &&
-      Math.abs(getStance(exercise, anthro, coordination).width - normal) < 0.005
+      exercise === 'deadlift'
+        ? style === 'conventional'
+        : Math.abs(getStance(exercise, anthro, coordination).width - normal) < 0.005
     const name =
       exercise === 'squat' ? (standard ? 'Amplia' : 'Media') : standard ? 'Sumo' : 'Convencional'
-    const other: Coordination = {
-      ...coordination,
-      deadliftStyle: standard && exercise === 'deadlift' ? 'sumo' : 'conventional',
+    const patch: Partial<Coordination> = {
+      ...(exercise === 'deadlift' ? { deadliftStyle: standard ? 'sumo' : 'conventional' } : {}),
       stanceWidth: exercise === 'squat' && standard ? wideSquat(anthro) : undefined,
       toeOutDeg: undefined,
     }
+    const other = { ...coordination, ...patch }
     const bounds = feasibleRange('progress', { exercise, anthro, coordination: other, task })
     const low = solveFrame(exercise, anthro, { ...task, progress: bounds.min }, other)
     const high = solveFrame(exercise, anthro, { ...task, progress: bounds.max }, other)
     return {
       name,
+      patch,
       other,
       bounds,
       width: low.stance.width,
@@ -188,15 +154,10 @@ export function StanceComparison({
     }
   }, [exercise, anthro, coordination, task])
   const fraction = clamp((progress - range.min) / (range.max - range.min || 1), 0, 1)
+  const referenceProgress = lerp(alternative.bounds.min, alternative.bounds.max, fraction)
   const ref = useMemo(
-    () =>
-      solveFrame(
-        exercise,
-        anthro,
-        { ...task, progress: lerp(alternative.bounds.min, alternative.bounds.max, fraction) },
-        alternative.other,
-      ),
-    [exercise, anthro, task, alternative, fraction],
+    () => solveFrame(exercise, anthro, { ...task, progress: referenceProgress }, alternative.other),
+    [exercise, anthro, task, alternative, referenceProgress],
   )
   const travel = Math.abs(
     series.points[series.points.length - 1].barHeight - series.points[0].barHeight,
@@ -236,18 +197,24 @@ export function StanceComparison({
       </p>
       {frame.feasible && ref.feasible ? (
         <>
-          <StanceProfiles
-            frame={frame}
-            reference={ref}
-            heightM={anthro.height}
-            currentLabel={currentLabel}
-            referenceLabel={alternative.name}
-          />
-          <p className="stance-explanation">
-            El tramo violeta va de la <strong>cadera a la vertical de la barra</strong>. A igual
-            carga, cuanto más largo es ese brazo de palanca, mayor es el momento que la barra ejerce
-            sobre la cadera.
-          </p>
+          <p className="stance-lever-title">Distancia de la cadera a la línea de la barra</p>
+          <dl className="stance-levers">
+            <div>
+              <dt>{currentLabel}</dt>
+              <dd>{formatBarArm(frame.kinetics.barMomentArm.hip)}</dd>
+            </div>
+            <div>
+              <dt>{alternative.name}</dt>
+              <dd>{formatBarArm(ref.kinetics.barMomentArm.hip)}</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            className="apply-stance"
+            onClick={() => onUseStance(alternative.patch, referenceProgress)}
+          >
+            Ver {alternative.name.toLocaleLowerCase('es-AR')} en 3D
+          </button>
         </>
       ) : (
         <p className="moment-note">

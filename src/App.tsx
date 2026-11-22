@@ -1,13 +1,12 @@
 import { MotionConfig } from 'motion/react'
 import { ChartSpline } from 'lucide-react'
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { MuscleId } from './anatomy/body'
 import { LiftTransport } from './components/LiftTransport'
 import { MuscleAtlas } from './components/MuscleAtlas'
 import { entries as muscleGuide } from './components/muscleGuide'
 import { SettingsDialog } from './components/SettingsDialog'
-import { ViewerBoundary } from './components/ViewerBoundary'
-import { Figure } from './components/Figure'
+import { AnatomyStage } from './components/AnatomyStage'
 import {
   BodyPanel,
   ModelNotes,
@@ -19,7 +18,6 @@ import { StanceControls, StanceComparison } from './components/StanceStudy'
 import { StudyGuide } from './components/StudyGuide'
 import { ViewerToolbar } from './components/ViewerToolbar'
 import { BodyEditor, BodyEditHint } from './components/BodyEditor'
-import { Inspector } from './components/Inspector'
 import { MetricsTable, buildRows } from './components/Metrics'
 import { LabHeader, LabFooter } from './components/LabHeader'
 import { BenchLab } from './components/BenchLab'
@@ -32,19 +30,8 @@ import { MomentPanel } from './components/MomentPanel'
 import { Collapsible, Slider } from './components/ui'
 import { usePlayback, useSpringSnapshot } from './hooks/useAnimationEngine'
 import { clamp } from './model/geometry'
-import {
-  type HotspotId,
-  type ParamId,
-  type Setup,
-  feasibleRange,
-  hotspotsFor,
-  editableHotspotsFor,
-  paramValue,
-  paramsFor,
-  patchFor,
-} from './model/interact'
+import { type HotspotId, type Setup, feasibleRange, editableHotspotsFor } from './model/interact'
 import { standingPartControls } from './model/standingPartControls'
-import { formatParam } from './components/params'
 import type { Coordination, Task } from './model/lift'
 import { simulateSeries, solveFrame } from './model/lift'
 import type { Anthropometry } from './model/anthropometry'
@@ -57,12 +44,11 @@ import './styles/atlas.css'
 import './styles/mechanics.css'
 import './styles/study.css'
 
-const AnatomyViewer = lazy(() => import('./components/AnatomyViewer'))
+const loadAnatomyViewer = () => import('./components/AnatomyViewer')
 const ACCENT = 'var(--accent)'
 
 function StandingLab() {
   const { state, dispatch, coordination } = useApp()
-  const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
   const [layer, setLayer] = useState<'muscles' | 'skeleton'>('muscles')
   const [muscle, setMuscle] = useState<MuscleId | null>(null)
   const [editingBody, setEditingBody] = useState(false)
@@ -70,13 +56,6 @@ function StandingLab() {
   const [guide, setGuide] = useState('posturas')
   const [editPart, setEditPart] = useState<HotspotId>('thigh')
   const [slow, setSlow] = useState(false)
-  const [unavailable, setUnavailable] = useState(false)
-  const useDiagramFallback = useCallback(() => {
-    setEditingBody(false)
-    setUnavailable(true)
-    setMode('diagram')
-  }, [])
-  const [selected, setSelected] = useState<HotspotId | null>(null)
   // Closed to begin with: the drawing is the app, and everything in here has a
   // place on it. The panel is the long form for when you want it.
   const [panelOpen, setPanelOpen] = useState(false)
@@ -224,31 +203,6 @@ function StandingLab() {
     [dispatch],
   )
 
-  // Each part carries what it currently reads, so hovering it can say what it
-  // is and where it stands before you commit to opening anything.
-  const hotspots = useMemo(() => {
-    if (mode !== 'diagram' || state.playing) return []
-    return hotspotsFor(exercise, frame, analyzing && state.showComGuides).map((hotspot) => {
-      const primary = paramsFor(hotspot.id, exercise)[0]
-      return {
-        ...hotspot,
-        readout: primary
-          ? formatParam(primary, paramValue(primary, { exercise, anthro, task, coordination }))
-          : undefined,
-      }
-    })
-  }, [
-    mode,
-    state.playing,
-    exercise,
-    frame,
-    analyzing,
-    state.showComGuides,
-    anthro,
-    task,
-    coordination,
-  ])
-
   const bodyControls = useMemo(
     () => (editingBody ? standingPartControls(editPart, setup) : []),
     [editingBody, editPart, setup],
@@ -258,14 +212,6 @@ function StandingLab() {
     setEditPart(part)
     setEditingBody(true)
   }
-  const setParam = useCallback(
-    (id: ParamId, value: number) => {
-      if (state.playing) dispatch({ type: 'setPlaying', playing: false })
-      dispatch({ type: 'setParams', patch: patchFor(id, value) })
-    },
-    [dispatch, state.playing],
-  )
-
   const setProgress = useCallback(
     (progress: number) =>
       dispatch({
@@ -283,8 +229,6 @@ function StandingLab() {
     slow ? 14 : 7,
     exercise,
   )
-
-  const selectedHotspot = hotspots.find((h) => h.id === selected) ?? null
 
   const rows = useMemo(
     () => (panelOpen ? buildRows(frame, exercise) : []),
@@ -341,30 +285,15 @@ function StandingLab() {
   const chooseMuscle = (id: MuscleId | null) => {
     setEditingBody(false)
     setMuscle(id)
-    if (id && !unavailable) {
-      setMode('anatomy')
-      setLayer('muscles')
-    }
+    if (id) setLayer('muscles')
   }
   const openSettings = () => {
     stopPlayback()
     setPanelOpen(true)
   }
-  const chooseView = (value: 'anatomy' | 'diagram') => {
-    setMode(value)
-    setEditingBody(false)
-    setUnavailable(false)
-    setSelected(null)
-  }
-
   return (
     <div className="atlas-app movement-app">
-      <LabHeader
-        onSwitch={() => {
-          setSelected(null)
-          setEditingBody(false)
-        }}
-      />
+      <LabHeader onSwitch={() => setEditingBody(false)} />
       <main className="atlas-main" aria-labelledby="exercise-title">
         <div
           className="atlas-layout"
@@ -393,21 +322,18 @@ function StandingLab() {
                 </div>
                 <ViewerToolbar
                   onSettings={openSettings}
-                  mode={mode}
-                  onMode={chooseView}
                   layer={layer}
                   onLayer={(value) => {
                     setLayer(value)
                     if (value === 'skeleton') setMuscle(null)
                   }}
-                  canEdit={mode === 'anatomy'}
                   editingBody={editingBody}
                   onEdit={() => {
                     stopPlayback()
                     setEditingBody(!editingBody)
                   }}
                 >
-                  {analyzing && mode === 'anatomy' && !editingBody && (
+                  {analyzing && !editingBody && (
                     <MechanicsControls<JointKey>
                       {...mechanics}
                       options={overlay.moments}
@@ -434,21 +360,12 @@ function StandingLab() {
                   )}
                 </ViewerToolbar>
               </div>
-              {unavailable && (
-                <p className="fallback-note" role="status">
-                  El visor 3D no pudo iniciarse. Podés explorar el mismo movimiento en el diagrama o
-                  volver a intentar con Anatomía 3D.
-                </p>
-              )}
-              <div className={`atlas-viewport ${mode}`} id="lift-viewport" tabIndex={-1}>
-                {mode === 'anatomy' &&
+              <AnatomyStage
+                loadViewer={loadAnatomyViewer}
+                onFailure={stopPlayback}
+                hint={
                   !editingBody &&
-                  !(analyzing && muscle && layer === 'muscles') && <BodyEditHint />}
-                {analyzing &&
-                  !editingBody &&
-                  mode === 'anatomy' &&
-                  muscle &&
-                  layer === 'muscles' && (
+                  (analyzing && muscle && layer === 'muscles' ? (
                     <div className="model-hint">
                       <button
                         aria-label={`Ver ficha de ${muscleGuide[muscle].name}`}
@@ -462,72 +379,34 @@ function StandingLab() {
                         {muscleGuide[muscle].name} · Ver ficha
                       </button>
                     </div>
-                  )}
-                {mode === 'anatomy' ? (
-                  <ViewerBoundary onUnavailable={useDiagramFallback}>
-                    <Suspense
-                      fallback={
-                        <p className="viewer-loading" role="status">
-                          Cargando el atlas anatómico…
-                        </p>
-                      }
-                    >
-                      <AnatomyViewer
-                        analyzing={analyzing}
-                        playing={state.playing}
-                        postures={series.postures}
-                        bounds={series.bounds}
-                        frame={frame}
-                        exercise={exercise}
-                        anthro={solvedAnthro}
-                        task={solvedTask}
-                        layer={layer}
-                        editingBody={editingBody}
-                        editForces={editForces}
-                        editJoint={editPart}
-                        onEditPart={selectBodyPart}
-                        mechanics={mechanics}
-                        peakMoment={peakMoment}
-                        onSelectJoint={(joint) => {
-                          selectJoint(joint)
-                          setGuide('momentos')
-                        }}
-                        selectedMuscle={analyzing ? muscle : null}
-                        onUnavailable={useDiagramFallback}
-                      />
-                    </Suspense>
-                  </ViewerBoundary>
-                ) : (
-                  <Figure
-                    frame={frame}
-                    bounds={series.bounds}
-                    exercise={exercise}
-                    color={ACCENT}
-                    showComGuides={analyzing && state.showComGuides}
-                    showMomentArms={analyzing && state.showMomentArms}
-                    showLoadMap={analyzing && state.showLoadMap}
-                    plateRadius={task.plateRadius}
-                    peakMoment={peakMoment}
-                    hotspots={state.playing ? [] : hotspots}
-                    selected={state.playing ? null : selected}
-                    onSelect={setSelected}
-                    popover={
-                      selectedHotspot &&
-                      !state.playing && (
-                        <Inspector
-                          hotspot={selectedHotspot.id}
-                          label={selectedHotspot.label}
-                          setup={setup}
-                          accent={ACCENT}
-                          onChange={setParam}
-                          onClose={() => setSelected(null)}
-                        />
-                      )
-                    }
-                  />
-                )}
-              </div>
-              {editingBody && mode === 'anatomy' && (
+                  ) : (
+                    <BodyEditHint />
+                  ))
+                }
+                viewerProps={{
+                  analyzing,
+                  playing: state.playing,
+                  postures: series.postures,
+                  bounds: series.bounds,
+                  frame,
+                  exercise,
+                  anthro: solvedAnthro,
+                  task: solvedTask,
+                  layer,
+                  editingBody,
+                  editForces,
+                  editJoint: editPart,
+                  onEditPart: selectBodyPart,
+                  mechanics,
+                  peakMoment,
+                  onSelectJoint: (joint) => {
+                    selectJoint(joint)
+                    setGuide('momentos')
+                  },
+                  selectedMuscle: analyzing ? muscle : null,
+                }}
+              />
+              {editingBody && (
                 <BodyEditor
                   options={editableHotspotsFor(exercise, frame)}
                   selected={editPart}
@@ -575,7 +454,6 @@ function StandingLab() {
                 onSpeed={() => setSlow(!slow)}
                 onPlay={() => {
                   setEditingBody(false)
-                  setSelected(null)
                   dispatch({ type: 'setPlaying', playing: !state.playing })
                 }}
                 onScrub={(value) => {
@@ -597,7 +475,7 @@ function StandingLab() {
                     aporta <b>{formatMoment(observed.barMomentNm)}</b>
                     {observed.id === 'l5s1' ? ' al tronco' : ' por pierna'}.
                   </p>
-                  {mode === 'anatomy' && !editingBody && mechanics.forces && (
+                  {mechanics.forces && (
                     <ForceReadingGuide
                       focus={mechanics.focus}
                       onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
@@ -606,11 +484,6 @@ function StandingLab() {
                     />
                   )}
                 </>
-              )}
-              {mode === 'diagram' && (
-                <p className="diagram-help">
-                  Tocá una articulación o un segmento para ajustar el modelo.
-                </p>
               )}
               {(warnings.length > 0 || frame.barBlocked) && (
                 <div className="model-warnings">
@@ -667,10 +540,16 @@ function StandingLab() {
                   series={series}
                   progress={task.progress}
                   range={progressRange}
+                  onUseStance={(stance, progress) => {
+                    dispatch({
+                      type: 'setParams',
+                      patch: { coordination: stance, task: { progress } },
+                    })
+                    document.getElementById('lift-viewport')?.focus()
+                  }}
                   onJoint={(joint) => {
                     setEditingBody(false)
                     selectJoint(joint)
-                    if (!unavailable) setMode('anatomy')
                     if (window.matchMedia('(max-width: 790px)').matches) {
                       document.getElementById('lift-viewport')?.focus()
                     }
@@ -695,7 +574,6 @@ function StandingLab() {
                     onSelectJoint={(joint) => {
                       setEditingBody(false)
                       selectJoint(joint)
-                      if (!unavailable) setMode('anatomy')
                     }}
                   />
                   {focus && (
@@ -741,11 +619,7 @@ function StandingLab() {
                   exercise={exercise}
                   selected={muscle}
                   onSelect={chooseMuscle}
-                  onShowModel={
-                    mode === 'anatomy'
-                      ? () => document.getElementById('lift-viewport')?.focus()
-                      : undefined
-                  }
+                  onShowModel={() => document.getElementById('lift-viewport')?.focus()}
                 />
               )}
             </StudyGuide>

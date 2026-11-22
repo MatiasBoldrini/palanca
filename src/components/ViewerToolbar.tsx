@@ -3,30 +3,23 @@ import { useRef, type ReactNode } from 'react'
 import { ControlDisclosure } from './ControlDisclosure'
 import './minimalControls.css'
 
-type Mode = 'anatomy' | 'diagram'
 type Layer = 'muscles' | 'skeleton'
 
 interface Props {
-  mode: Mode
-  onMode: (mode: Mode) => void
   layer: Layer
   onLayer: (layer: Layer) => void
   editingBody: boolean
   onSettings: () => void
   onEdit: () => void
-  canEdit: boolean
   children?: ReactNode
 }
 
 export function ViewerToolbar({
-  mode,
-  onMode,
   layer,
   onLayer,
   editingBody,
   onEdit,
   onSettings,
-  canEdit,
   children,
 }: Props) {
   const action = useRef<HTMLDivElement>(null)
@@ -64,53 +57,32 @@ export function ViewerToolbar({
           {(close) => (
             <>
               <label className="view-option-row">
-                Vista
+                Anatomía
                 <span className="view-select">
                   <select
-                    value={mode}
-                    aria-label="Representación"
+                    value={layer}
+                    aria-label="Capa anatómica"
                     onChange={(e) => {
-                      onMode(e.target.value as Mode)
+                      onLayer(e.target.value as Layer)
                       close()
                     }}
                   >
-                    <option value="anatomy">Anatomía 3D</option>
-                    <option value="diagram">Diagrama 2D</option>
+                    <option value="muscles">Músculos</option>
+                    <option value="skeleton">Esqueleto</option>
                   </select>
                   <ChevronDown size={14} aria-hidden />
                 </span>
               </label>
-              {mode === 'anatomy' && (
-                <label className="view-option-row">
-                  Anatomía
-                  <span className="view-select">
-                    <select
-                      value={layer}
-                      aria-label="Capa anatómica"
-                      onChange={(e) => {
-                        onLayer(e.target.value as Layer)
-                        close()
-                      }}
-                    >
-                      <option value="muscles">Músculos</option>
-                      <option value="skeleton">Esqueleto</option>
-                    </select>
-                    <ChevronDown size={14} aria-hidden />
-                  </span>
-                </label>
-              )}
-              {canEdit && (
-                <button
-                  className="edit-body-action"
-                  type="button"
-                  onClick={() => {
-                    close()
-                    toggleEditor()
-                  }}
-                >
-                  <ScanLine size={16} aria-hidden /> Ajustar cuerpo
-                </button>
-              )}
+              <button
+                className="edit-body-action"
+                type="button"
+                onClick={() => {
+                  close()
+                  toggleEditor()
+                }}
+              >
+                <ScanLine size={16} aria-hidden /> Ajustar cuerpo
+              </button>
               <button
                 className="edit-body-action"
                 type="button"

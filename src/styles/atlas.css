@@ -163,35 +163,16 @@ body {
 .atlas-viewport.anatomy {
   background: #f8f6f0;
 }
-.atlas-viewport.diagram {
-  background: var(--stage);
-}
-.atlas-viewport > .figure {
-  height: 100%;
-  border-radius: 0;
-}
 .viewer-loading {
   margin: auto;
   color: #65675f;
   font-size: 14px;
 }
-.fallback-note,
-.diagram-help,
-.model-warnings {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-.fallback-note {
-  padding: 10px 20px;
-  background: var(--soft);
-}
-.diagram-help,
 .model-warnings {
   padding: 0 20px 10px;
-}
-.model-warnings {
   color: var(--muscle-ink);
+  font-size: 13px;
+  line-height: 1.45;
 }
 .lift-transport {
   display: flex;
@@ -309,7 +290,7 @@ body {
 .muscle-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 32px 1fr 16px;
+  grid-template-columns: 1fr 16px;
   gap: 11px;
   align-items: center;
   text-align: left;
@@ -318,15 +299,6 @@ body {
 }
 .muscle-row:hover {
   background: var(--soft);
-}
-.region-icon {
-  display: block;
-  width: 31px;
-  height: 39px;
-  padding: 3px 1px;
-  border-radius: 5px;
-  color: #c7bbaa;
-  background: var(--swatch);
 }
 .muscle-row > span {
   display: grid;
@@ -363,19 +335,12 @@ body {
   margin: 12px 0;
 }
 .muscle-identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   margin-bottom: 12px;
 }
 .muscle-identity h3 {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.025em;
-}
-.muscle-identity .region-icon {
-  width: 44px;
-  height: 58px;
 }
 .observe {
   border-left: 2px solid var(--muscle-ink);

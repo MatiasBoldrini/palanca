@@ -46,9 +46,3 @@ export const PARAM_UI: Record<ParamId, ParamUi> = {
   arm: { label: 'Largo del brazo', scale: 100, step: 0.5, format: cm },
   dorsiflexion: { label: 'Dorsiflexión disponible', scale: 1, step: 1, format: (v) => `${v}°` },
 }
-
-/** A model value written the way the controls write it. */
-export function formatParam(id: ParamId, value: number): string {
-  const ui = PARAM_UI[id]
-  return ui.format(Number((value * ui.scale).toFixed(1)))
-}

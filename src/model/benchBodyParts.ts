@@ -5,7 +5,7 @@ function midpoint(a: BenchPoint, b: BenchPoint): BenchPoint {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }
 }
 
-/** World-space landmarks shared by the 3D atlas and its orthographic diagram. */
+/** World-space landmarks for selecting and adjusting segments on the bench model. */
 export function benchBodyTargets(frame: BenchFrame, side: 0 | 1 = 0) {
   const leg = frame.pose.legs[side]
   const arm = frame.arms[side]

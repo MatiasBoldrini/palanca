@@ -145,30 +145,6 @@
 .force-feet dt span {
   color: #587b30;
 }
-.bench-diagram {
-  display: flex;
-  flex-flow: column;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  background: #f8f6f0;
-  color: #2d3632;
-}
-.bench-diagram svg {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-}
-.bench-diagram .diagram-plane {
-  margin: 5px;
-  align-self: flex-end;
-  background: #fbfaf6;
-  color: #373c38;
-  border: 1px solid #d6d1c5;
-  border-radius: 4px;
-  padding: 4px;
-  font-size: 12px;
-}
 @media (max-width: 600px) {
   .mechanics-tools {
     gap: 4px 6px;
@@ -365,14 +341,6 @@
 [data-force-focus="body"] .atlas-viewport [data-force-kind]:not([data-force-kind="body"]),
 [data-force-focus="support"] .atlas-viewport [data-force-kind]:not([data-force-kind="support"]) { visibility: hidden; }
 .viewer-card:not([data-force-focus="all"]) .atlas-viewport :is([data-moment], .mechanics-lever, [data-label-for]:not([data-force-kind]), .mechanics-leader:not([data-force-kind])) { opacity: .19; }
-.diagram-edit-target { cursor: pointer }
-.diagram-edit-target .edit-pin { fill: #567169; stroke: #fff; stroke-width: 1.5 }
-.diagram-edit-target[aria-pressed="true"] .edit-pin, .diagram-edit-target:focus-visible .edit-pin { fill: #a54431; }
-.stance-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 9px 14px; }
-.stance-footprint { width: 104px; height: 53px; flex: none; background: var(--soft); border-radius: 5px; }
-.footprint-midline { stroke: var(--muted); opacity: .4; stroke-dasharray: 3 3; }
-.footprint-measure { stroke: var(--muted); stroke-width: 1; }
-.footprint-sole { fill: #54766a; }
 .stance-presets { display: flex; gap: 3px; }
 .stance-presets button { font-size: 12px; border: 1px solid var(--rule); padding: 4px 8px; color: var(--muted); border-radius: 5px; }
 .stance-presets button[aria-pressed="true"] { border-color: #88a39a; background: #e5eee9; color: #224d40; }
@@ -381,7 +349,6 @@
 .stance-comparison th:first-child { text-align: left; font-weight: 500; white-space: normal; }
 .stance-comparison thead th { color: var(--muted); font-size: 11px; }
 .stance-comparison td:nth-child(2) { color: var(--ink); font-weight: 650; }
-@media(max-width:620px) { .stance-tools { gap: 6px 12px; } .stance-footprint { width: 90px; height: 46px; } }
 .study-joints { margin-top: 9px; }
 
 .stance-toeout { font-size: 11px; color: var(--muted); margin-top: 2px; }

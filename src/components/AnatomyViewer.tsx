@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { createAtlasRenderer } from '../anatomy/atlasRenderer'
 import { touchCameraHint, ViewerCameraControls } from '../anatomy/viewerCameraControls'
 import { createAnatomicalBody, type MuscleId } from '../anatomy/body'
 import { createMechanicsDrawing, FORCE_LENGTH_IN_HEIGHTS } from '../anatomy/mechanicsDrawing'
@@ -643,6 +644,7 @@ export function AnatomyViewer(props: Props) {
     const el = host.current
     if (!el) return
     let active = true
+    const loading = new AbortController()
     let renderer: THREE.WebGLRenderer | undefined
     function unavailable(event?: Event) {
       event?.preventDefault()
@@ -652,15 +654,7 @@ export function AnatomyViewer(props: Props) {
     // lifecycle check. No animation loop runs after the first frame.
     const start = requestAnimationFrame(async () => {
       try {
-        renderer = new THREE.WebGLRenderer({
-          antialias: true,
-          alpha: false,
-          powerPreference: 'low-power',
-        })
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.65))
-        renderer.outputColorSpace = THREE.SRGBColorSpace
-        renderer.toneMapping = THREE.ACESFilmicToneMapping
-        renderer.toneMappingExposure = 1
+        renderer = createAtlasRenderer(1.65, 1)
         renderer.shadowMap.enabled = true
         renderer.shadowMap.type = THREE.PCFShadowMap
         renderer.shadowMap.autoUpdate = false
@@ -681,7 +675,7 @@ export function AnatomyViewer(props: Props) {
           },
         )
         runtime.current = studio
-        const body = await createAnatomicalBody()
+        const body = await createAnatomicalBody(loading.signal)
         if (!active) {
           body.dispose()
           return
@@ -694,6 +688,7 @@ export function AnatomyViewer(props: Props) {
     })
     return () => {
       active = false
+      loading.abort()
       cancelAnimationFrame(start)
       runtime.current?.dispose()
       runtime.current = null

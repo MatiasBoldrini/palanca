@@ -1,5 +1,5 @@
 import { BookOpen, ChartSpline, ChevronDown } from 'lucide-react'
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { usePlayback } from '../hooks/useAnimationEngine'
 import {
   BENCH_GRIP,
@@ -15,7 +15,7 @@ import { BodyEditHint } from './BodyEditor'
 import { BenchBodyEditor } from './BenchBodyEditor'
 import { ControlDisclosure } from './ControlDisclosure'
 import type { BenchPartId } from '../model/bodyEditing'
-import { BenchDiagram } from './BenchDiagram'
+import { AnatomyStage } from './AnatomyStage'
 import { LabFooter, LabHeader } from './LabHeader'
 import { AnalysisToggle, LoadButton } from './MovementControls'
 import { LiftTransport } from './LiftTransport'
@@ -24,10 +24,9 @@ import { SharePosture } from './SharePosture'
 import { SettingsDialog } from './SettingsDialog'
 import { Slider } from './ui'
 import { StudyGuide } from './StudyGuide'
-import { ViewerBoundary } from './ViewerBoundary'
 import { ViewerToolbar } from './ViewerToolbar'
 
-const BenchViewer = lazy(() => import('./BenchViewer'))
+const loadBenchViewer = () => import('./BenchViewer')
 const RANGE = { min: 0, max: 1 }
 const GUIDE_TABS = [
   { id: 'momentos', label: 'Articulaciones' },
@@ -46,9 +45,7 @@ const JOINT_HELP = {
 export function BenchLab() {
   const { state, dispatch } = useApp()
   const { anthro, task, bench, mechanics, analyzing } = state
-  const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
   const [layer, setLayer] = useState<'muscles' | 'skeleton'>('muscles')
-  const [unavailable, setUnavailable] = useState(false)
   const [settings, setSettings] = useState(false)
   const [guide, setGuide] = useState('momentos')
   const [editingBody, setEditingBody] = useState(false)
@@ -148,10 +145,6 @@ export function BenchLab() {
     (value: number) => dispatch({ type: 'setBench', patch: { progress: value } }),
     [dispatch],
   )
-  const fallback = useCallback(() => {
-    setMode('diagram')
-    setUnavailable(true)
-  }, [])
   const phase = usePlayback(
     bench.progress,
     state.playing,
@@ -209,15 +202,9 @@ export function BenchLab() {
                 </div>
                 <ViewerToolbar
                   onSettings={openSettings}
-                  mode={mode}
-                  onMode={(next) => {
-                    setMode(next)
-                    setUnavailable(false)
-                  }}
                   layer={layer}
                   onLayer={setLayer}
                   editingBody={editingBody}
-                  canEdit
                   onEdit={() => {
                     stop()
                     setEditingBody(!editingBody)
@@ -251,58 +238,27 @@ export function BenchLab() {
                   )}
                 </ViewerToolbar>
               </div>
-              {unavailable && (
-                <p className="fallback-note" role="status">
-                  Se abrió el diagrama del mismo movimiento porque el visor 3D no pudo iniciarse.
-                </p>
-              )}
-              <div className={'atlas-viewport ' + mode} id="lift-viewport" tabIndex={-1}>
-                {mode === 'anatomy' && !editingBody && <BodyEditHint />}
-                {mode === 'anatomy' ? (
-                  <ViewerBoundary onUnavailable={fallback}>
-                    <Suspense
-                      fallback={
-                        <p className="viewer-loading" role="status">
-                          Cargando el atlas anatómico…
-                        </p>
-                      }
-                    >
-                      <BenchViewer
-                        analyzing={analyzing}
-                        frame={frame}
-                        layer={layer}
-                        joint={selected}
-                        editingBody={editingBody}
-                        editForces={editForces}
-                        editPart={editPart}
-                        onEditPart={openPart}
-                        showForces={mechanics.forces}
-                        showLoadPath={mechanics.loadPath}
-                        showMoments={mechanics.moments}
-                        showBarArm={mechanics.lever}
-                        peaks={peaks}
-                        onUnavailable={fallback}
-                        onSelectJoint={selectJoint}
-                      />
-                    </Suspense>
-                  </ViewerBoundary>
-                ) : (
-                  <BenchDiagram
-                    frame={frame}
-                    height={anthro.height}
-                    forces={analyzing && mechanics.forces}
-                    loadPath={mechanics.loadPath}
-                    moments={analyzing && mechanics.moments}
-                    lever={analyzing && mechanics.lever}
-                    editingBody={editingBody}
-                    editForces={editForces}
-                    editPart={editPart}
-                    onEditPart={openPart}
-                    joint={selected}
-                    peak={peak}
-                  />
-                )}
-              </div>
+              <AnatomyStage
+                loadViewer={loadBenchViewer}
+                onFailure={stop}
+                hint={!editingBody && <BodyEditHint />}
+                viewerProps={{
+                  analyzing,
+                  frame,
+                  layer,
+                  joint: selected,
+                  editingBody,
+                  editForces,
+                  editPart,
+                  onEditPart: openPart,
+                  showForces: mechanics.forces,
+                  showLoadPath: mechanics.loadPath,
+                  showMoments: mechanics.moments,
+                  showBarArm: mechanics.lever,
+                  peaks,
+                  onSelectJoint: selectJoint,
+                }}
+              />
               {editingBody && (
                 <BenchBodyEditor
                   frame={frame}

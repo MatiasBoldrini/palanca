@@ -214,6 +214,7 @@ interface Store {
   state: AppState
   dispatch: (action: Action) => void
   coordination: Coordination
+  savePosture: () => void
 }
 
 const StateContext = createContext<Store | null>(null)
@@ -380,24 +381,26 @@ function loadInitial(): AppState {
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitial)
 
+  const savePosture = useCallback(() => {
+    const encoded = encode(state)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, encoded)
+    } catch {
+      /* storage unavailable */
+    }
+    window.history.replaceState(null, '', `#s=${encoded}`)
+  }, [state])
+
   useEffect(() => {
     // Keep serialization and history writes off the frame loop.
     if (state.playing) return
-    const timer = window.setTimeout(() => {
-      const encoded = encode(state)
-      try {
-        window.localStorage.setItem(STORAGE_KEY, encoded)
-      } catch {
-        /* storage unavailable */
-      }
-      window.history.replaceState(null, '', `#s=${encoded}`)
-    }, 250)
+    const timer = window.setTimeout(savePosture, 250)
     return () => window.clearTimeout(timer)
-  }, [state])
+  }, [state.playing, savePosture])
 
   const value = useMemo<Store>(
-    () => ({ state, dispatch, coordination: state.coordination[state.exercise] }),
-    [state],
+    () => ({ state, dispatch, coordination: state.coordination[state.exercise], savePosture }),
+    [state, savePosture],
   )
 
   return <StateContext.Provider value={value}>{children}</StateContext.Provider>

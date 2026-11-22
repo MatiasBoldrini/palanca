@@ -62,7 +62,7 @@ export const entries: Record<MuscleId, Entry> = {
       'A ambos lados de la columna, estos músculos producen un momento extensor que ayuda a sostener el tronco inclinado.',
     observe: {
       deadlift:
-        'En el diagrama 2D, compará la distancia de la barra a L5/S1 al despegar y al terminar.',
+        'Girá el modelo de perfil y compará el brazo de palanca de L5/S1 en el despegue y el bloqueo.',
       squat:
         'Compará las posiciones de barra alta y baja en Ajustes y observá cómo cambia la inclinación del torso.',
     },

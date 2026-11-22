@@ -215,8 +215,7 @@ export function TaskPanel() {
         onChange={(v) => dispatch({ type: 'setTask', patch: { load: v } })}
       />
       <p className="caption" style={{ marginTop: 4 }}>
-        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo. En el diagrama 2D, tocá el
-        triángulo bajo el pie para moverlo.
+        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo.
       </p>
 
       <Collapsible title="Ajuste numérico">
@@ -255,30 +254,12 @@ export function TaskPanel() {
 export function ViewPanel() {
   const { state, dispatch } = useApp()
   return (
-    <Section title="Vista">
-      <Switch
-        checked={state.showLoadMap}
-        onChange={() => dispatch({ type: 'toggle', key: 'showLoadMap' })}
-        label="Mapa de carga"
-        hint="En el diagrama 2D, los colores marcan la demanda articular. El rojo más oscuro indica un momento mayor."
-      />
+    <Section title="Gráficos de momentos">
       <Switch
         checked={state.showCurves}
         onChange={() => dispatch({ type: 'toggle', key: 'showCurves' })}
         label="Curvas del recorrido"
         hint="Muestra cómo cambia cada momento articular del fondo a la extensión. El punto indica la posición actual."
-      />
-      <Switch
-        checked={state.showMomentArms}
-        onChange={() => dispatch({ type: 'toggle', key: 'showMomentArms' })}
-        label="Brazos de palanca"
-        hint="En el diagrama 2D, muestra la distancia horizontal de cada articulación a la línea de la barra en centímetros."
-      />
-      <Switch
-        checked={state.showComGuides}
-        onChange={() => dispatch({ type: 'toggle', key: 'showComGuides' })}
-        label="Centro de masa y punto de apoyo"
-        hint="En el diagrama 2D, marca dónde cae la línea de gravedad del conjunto cuerpo más barra."
       />
     </Section>
   )

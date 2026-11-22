@@ -5,17 +5,6 @@
   padding: 8px 5px 10px;
   border-top: 1px solid var(--rule);
 }
-.stance-width-panel .stance-footprint {
-  width: 70px;
-  height: 52px;
-  background: var(--soft);
-}
-.stance-width-panel .footprint-sole {
-  fill: var(--muted);
-}
-.stance-width-panel circle {
-  fill: var(--card);
-}
 .stance-width-input {
   flex: 1;
   min-width: 0;
@@ -79,4 +68,31 @@
   background: var(--soft);
   color: var(--ink);
   font-weight: 600;
+}
+
+.stance-lever-title {
+  margin-block: 12px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stance-levers {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+.stance-levers dt {
+  font-size: 13px;
+}
+.stance-levers dd {
+  margin: 0;
+  font: 500 22px var(--headline);
+  font-variant-numeric: tabular-nums;
+}
+.apply-stance {
+  margin-bottom: 8px;
+  min-height: 44px;
+  color: var(--muscle-ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
