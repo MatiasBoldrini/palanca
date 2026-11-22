@@ -1,12 +1,17 @@
-import { ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createAnatomicalBody, type MuscleId } from '../anatomy/body'
 import { createMechanicsDrawing, FORCE_LENGTH_IN_HEIGHTS } from '../anatomy/mechanicsDrawing'
-import type { MechanicsView } from '../model/mechanicsOverlay'
+import { createBodyPartDrawing } from '../anatomy/bodyPartDrawing'
+import { standingTargets } from '../anatomy/standingTargets'
+import { lateralAlongFoot } from '../model/jointLandmarks'
+import type { HotspotId } from '../model/interact'
+import { createLoadPathDrawing } from '../anatomy/loadPathDrawing'
+import { formatForce, type MechanicsView } from '../model/mechanicsOverlay'
 import type { JointKey } from '../model/kinetics'
-import type { Anthropometry } from '../model/anthropometry'
+import { GRAVITY, type Anthropometry } from '../model/anthropometry'
 import type { Vec2 } from '../model/geometry'
 import type { Bounds, ExerciseId, Frame, Task } from '../model/lift'
 import type { Posture } from '../model/posture'
@@ -14,12 +19,15 @@ import './anatomyViewer.css'
 
 interface Props {
   frame: Frame
+  editingBody?: boolean
+  editForces?: boolean
+  editJoint?: HotspotId | null
+  onEditPart?: (id: HotspotId) => void
   anthro: Anthropometry
   exercise: ExerciseId
   task: Task
   mechanics: MechanicsView
   peakMoment: number
-  jointPeaks: Record<JointKey, number>
   onSelectJoint: (id: JointKey) => void
   playing?: boolean
   bounds?: Bounds
@@ -109,16 +117,17 @@ function studioFloor() {
 
   return {
     root,
-    update({ frame, anthro, exercise }: Props) {
-      const p = frame.posture
+    update({ frame, anthro }: Props) {
+      const { posture: p, stance } = frame
       const middle = (p.heel.x + p.toe.x) / 2
-      const stance = (anthro.height / 1.71) * (exercise === 'squat' ? 0.151 : 0.115)
+      const half = lateralAlongFoot(stance, p.ankle.x, middle)
       for (const [i, side] of [-1, 1].entries()) {
-        shadows[i].position.set(middle, -0.002, side * stance)
+        shadows[i].position.set(middle, -0.002, side * half)
+        shadows[i].rotation.y = -side * stance.toeOutRad
         shadows[i].scale.set(anthro.foot * 1.9, 1, anthro.foot * 0.9)
       }
       shadows[2].position.set(middle, -0.003, 0)
-      shadows[2].scale.set(anthro.foot * 4, 1, stance * 6)
+      shadows[2].scale.set(anthro.foot * 4, 1, half * 6)
     },
     dispose() {
       gridGeometry.dispose()
@@ -175,7 +184,9 @@ function createStudio(
   const floor = studioFloor()
   scene.add(floor.root)
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 25)
+  const loadPath = createLoadPathDrawing(host)
   const drawing = createMechanicsDrawing(host, (id) => data().onSelectJoint(id))
+  const bodyParts = createBodyPartDrawing<HotspotId>(host, (part) => data().onEditPart?.(part))
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = false
   controls.enablePan = false
@@ -198,6 +209,8 @@ function createStudio(
   let fittedRadius = 0
   let fittedLoad = 0
   let fittedForceRatio = -1
+  let fittedWidth = 0
+  let fittedToeOut = 0
   const sweep = { left: 0, right: 0, top: 0, bottom: 0 }
   const ray = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
@@ -224,7 +237,7 @@ function createStudio(
   } | null = null
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-  function fit({ frame, anthro, task, bounds, postures, mechanics }: Props) {
+  function fit({ frame, anthro, task, bounds, postures, mechanics, editingBody, editForces }: Props) {
     direction.subVectors(camera.position, controls.target).normalize()
     right.crossVectors(camera.up, direction).normalize()
     up.crossVectors(direction, right).normalize()
@@ -245,16 +258,18 @@ function createStudio(
       top = Math.max(top, vertical + dy)
     }
     const h = anthro.height
-    const forceRatio = mechanics.forces ? task.load / (task.load + anthro.mass) : 0
+    const { stance } = frame
+    const showForces = editingBody ? editForces : mechanics.forces
+    const forceRatio = showForces ? task.load / (task.load + anthro.mass) : 0
     function includePose(p: Posture) {
       include(p.headTop, h * 0.055, 0.025)
       include(p.shoulder, h * 0.145, h * 0.06)
       include(p.hip, h * 0.11, h * 0.075)
-      include(p.elbow, h * 0.21, h * 0.032)
-      include(p.hand, h * 0.22, h * 0.028)
-      include(p.knee, h * 0.105, h * 0.055)
-      include(p.heel, h * 0.13, 0.025)
-      include(p.toe, h * 0.13, 0.02)
+      include(p.elbow, stance.elbowHalf + 0.02, h * 0.032)
+      include(p.hand, stance.gripHalf, h * 0.028)
+      include(p.knee, Math.max(stance.ankleHalf, stance.kneeHalf), h * 0.055)
+      include(p.heel, stance.heelHalf, 0.035)
+      include(p.toe, stance.toeHalf, 0.035)
       include(p.bar, 0.89, 0.02)
       if (forceRatio)
         include({ x: p.bar.x, y: p.bar.y - h * FORCE_LENGTH_IN_HEIGHTS * forceRatio }, 0, 0.02)
@@ -269,6 +284,8 @@ function createStudio(
       fittedScale !== h ||
       fittedRadius !== task.plateRadius ||
       fittedForceRatio !== forceRatio ||
+      fittedWidth !== stance.width ||
+      fittedToeOut !== stance.toeOutRad ||
       fittedLoad !== task.load
     ) {
       for (const p of postures ?? []) includePose(p)
@@ -280,6 +297,8 @@ function createStudio(
       }
       Object.assign(sweep, { left, right: farRight, top, bottom })
       fittedSamples = postures
+      fittedWidth = stance.width
+      fittedToeOut = stance.toeOutRad
       fittedScale = h
       fittedRadius = task.plateRadius
       fittedLoad = task.load
@@ -343,8 +362,13 @@ function createStudio(
       floor.update(next)
       renderer.shadowMap.needsUpdate = true
     }
-    if (!posed || posed.layer !== next.layer || posed.selectedMuscle !== next.selectedMuscle) {
-      body.style(next.layer, next.selectedMuscle)
+    if (
+      !posed ||
+      posed.layer !== next.layer ||
+      posed.selectedMuscle !== next.selectedMuscle ||
+      posed.editingBody !== next.editingBody
+    ) {
+      body.style(next.layer, next.editingBody ? null : next.selectedMuscle)
       body.root.traverse((part) => {
         if (part instanceof THREE.Mesh) {
           part.receiveShadow = true
@@ -355,7 +379,13 @@ function createStudio(
       // A group chosen from the list can be on the far side of the body.
       // A group picked directly in the scene is already in view.
       const group = next.selectedMuscle
-      if (group && group !== pickedMuscle && next.layer === 'muscles') {
+      if (
+        !next.editingBody &&
+        !posed?.editingBody &&
+        group &&
+        group !== pickedMuscle &&
+        next.layer === 'muscles'
+      ) {
         const anterior = group === 'quadriceps' || group === 'core'
         const posterior =
           group === 'glutes' ||
@@ -369,15 +399,6 @@ function createStudio(
       }
       pickedMuscle = null
     }
-    if (
-      next.layer === 'muscles' &&
-      (posed?.frame !== next.frame ||
-        posed?.jointPeaks !== next.jointPeaks ||
-        posed?.layer !== next.layer ||
-        posed?.selectedMuscle !== next.selectedMuscle)
-    ) {
-      body.drawDemand(next.frame.kinetics.moment, next.jointPeaks, next.selectedMuscle)
-    }
     posed = next
     if (turn) {
       const t = reducedMotion.matches ? 1 : Math.min(1, (performance.now() - turn.start) / 360)
@@ -389,7 +410,24 @@ function createStudio(
     }
     fit(next)
     renderer.render(scene, camera)
-    drawing.draw(next, camera, width, height)
+    if (next.editingBody) {
+      camera.getWorldDirection(direction)
+      const side = direction.z > 0 ? -1 : 1
+      const targets = standingTargets(next.frame, next.anthro, next.exercise, side)
+      if (next.editForces) {
+        const edit = {
+          ...next,
+          mechanics: { ...next.mechanics, forces: true, moments: false, lever: false },
+        }
+        const contacts = loadPath.draw(edit, camera, width, height)
+        drawing.draw(edit, camera, width, height, contacts)
+      }
+      bodyParts.draw(camera, width, height, targets, next.editJoint ?? null)
+      return
+    }
+    bodyParts.hide()
+    const contacts = loadPath.draw(next, camera, width, height)
+    drawing.draw(next, camera, width, height, contacts)
   }
 
   function invalidate() {
@@ -535,7 +573,7 @@ function createStudio(
   function pick(e: PointerEvent) {
     if (tap?.id !== e.pointerId) return
     move(e)
-    if (!tap || !body || data().layer !== 'muscles') return
+    if (!tap || !body || (!data().editingBody && data().layer !== 'muscles')) return
     tap = null
     if (requested) draw()
     const rect = canvas.getBoundingClientRect()
@@ -553,19 +591,25 @@ function createStudio(
         continue
       let shown = true
       let muscle: MuscleId | null = null
+      let part: HotspotId | undefined
       for (let node: THREE.Object3D | null = object; node; node = node.parent) {
         if (!node.visible) {
           shown = false
           break
         }
         muscle ??= node.userData.muscle ?? null
+        part ??= node.userData.hotspot
       }
       if (!shown) continue
+      if (data().editingBody) {
+        if (part) data().onEditPart?.(part)
+        return
+      }
       pickedMuscle = muscle === data().selectedMuscle ? null : muscle
       data().onSelectMuscle(pickedMuscle)
       return
     }
-    data().onSelectMuscle(null)
+    if (!data().editingBody) data().onSelectMuscle(null)
   }
 
   const resize = new ResizeObserver(() => {
@@ -613,6 +657,8 @@ function createStudio(
       controls.removeEventListener('change', change)
       controls.removeEventListener('start', cancelTurn)
       controls.dispose()
+      bodyParts.dispose()
+      loadPath.dispose()
       drawing.dispose()
       body?.dispose()
       scene.traverse((part) => {
@@ -705,8 +751,50 @@ export function AnatomyViewer(props: Props) {
     }
   }, [hint])
 
+  const showContacts = !props.editingBody && props.mechanics.forces && props.mechanics.loadPath
+  const deadlift = props.exercise === 'deadlift'
   return (
-    <div className="anatomy-viewer">
+    <div
+      className={
+        'anatomy-viewer' +
+        (showContacts ? ' with-load-path' : '') +
+        (props.editingBody ? ' editing-body' : '') +
+        (props.editingBody && props.editForces ? ' edit-forces' : '')
+      }
+    >
+      {showContacts && (
+        <div
+          className="contact-summary"
+          role="group"
+          aria-label="Fuerzas de contacto sobre el cuerpo"
+        >
+          <div data-force-kind="bar">
+            <ArrowDown size={19} strokeWidth={2.7} aria-hidden />
+            <dl>
+              <dt>
+                {deadlift ? 'Barra sobre las manos' : 'Barra sobre la espalda'}
+                <span className="anatomy-sr"> hacia abajo</span>
+              </dt>
+              <dd>
+                {formatForce((props.task.load * GRAVITY) / (deadlift ? 2 : 1))}
+                <small>{deadlift ? 'por mano' : 'en total'}</small>
+              </dd>
+            </dl>
+          </div>
+          <div data-force-kind="support">
+            <ArrowUp size={19} strokeWidth={2.7} aria-hidden />
+            <dl>
+              <dt>
+                Suelo sobre los pies<span className="anatomy-sr"> hacia arriba</span>
+              </dt>
+              <dd>
+                {formatForce(props.frame.kinetics.systemWeight / 2)}
+                <small>por pie</small>
+              </dd>
+            </dl>
+          </div>
+        </div>
+      )}
       <div className="anatomy-surface" ref={host} />
       <span id={hint} className="anatomy-sr">
         Arrastrá o usá las flechas para girar. Con más y menos ajustás el zoom. Inicio restablece la

@@ -27,9 +27,14 @@ import {
   squatElbow,
 } from './posture'
 
+import { getStance, type DeadliftStyle, type Stance } from './stance'
+
 export type ExerciseId = 'deadlift' | 'squat'
 
 export interface Coordination {
+  /** Distance between the centres of the two feet, in metres. */
+  stanceWidth?: number
+  deadliftStyle?: DeadliftStyle
   /**
    * 0 = hip dominant with vertical shins, 1 = knees travel forward.
    * Anchored to Edington et al. (2018): 8.6 deg of tibia angle for the close
@@ -42,10 +47,8 @@ export interface Coordination {
    * Deadlift only: how far the arm is held off vertical, degrees. Positive
    * puts the shoulder in front of the bar.
    *
-   * At 0 the arm is a pure tension member, which is what a heavy pull looks
-   * like: the bar can only push the hand upwards, so anything else has to be
-   * held there by the shoulder. Every degree therefore buys a shoulder moment,
-   * which is why the angle collapses towards 0 as the load goes up.
+   * The hanging bar pulls down on the hands. Moving the shoulder horizontally
+   * away from this line of force increases the bar's moment about the shoulder.
    */
   armLean: number
   /** Squat only: distance from the acromion down the back to the bar, metres. */
@@ -76,6 +79,7 @@ export interface Task {
 }
 
 export interface Frame {
+  stance: Stance
   posture: Posture
   angles: JointAngles
   kinetics: Kinetics
@@ -273,13 +277,28 @@ function shinFrontAt(ankle: Vec2, knee: Vec2, height: number): number {
 }
 
 /** The parts of a deadlift pose that are fixed before the bar is placed. */
-function deadliftFrame(a: Anthropometry, task: Task, coord: Coordination) {
+function projectedBody(a: Anthropometry, stance: Stance): Anthropometry {
+  return {
+    ...a,
+    foot: stance.sagittalFoot,
+    shank: stance.sagittalShank,
+    thigh: stance.sagittalThigh,
+    arm: stance.sagittalArm,
+  }
+}
+
+function deadliftFrame(body: Anthropometry, task: Task, coord: Coordination) {
+  const stance = getStance('deadlift', body, coord, task.progress)
+  const a = projectedBody(body, stance)
+  const standing = projectedBody(body, getStance('deadlift', body, coord, 1))
   const { heel, toe, ankle } = footPoints(a)
-  const lockout = deadliftLockoutHeight(a, coord.spineFlexion, coord.armLean)
+  const lockout = deadliftLockoutHeight(standing, coord.spineFlexion, coord.armLean)
   const barHeight = lerp(task.plateRadius, lockout, task.progress)
   const tibiaAngle = deadliftTibiaAngle(a, task.progress, coord.kneeTravel)
   const knee = add(ankle, fromPolar(rad(90 - tibiaAngle), a.shank))
   return {
+    stance,
+    a,
     heel,
     toe,
     ankle,
@@ -302,8 +321,8 @@ export const deadliftBarLimit = (
   coord: Coordination,
 ): number => deadliftFrame(a, task, coord).barLimit
 
-export function solveDeadlift(a: Anthropometry, task: Task, coord: Coordination): Frame {
-  const { heel, toe, ankle, knee, barHeight, tibiaAngle, barLimit } = deadliftFrame(a, task, coord)
+export function solveDeadlift(body: Anthropometry, task: Task, coord: Coordination): Frame {
+  const { a, stance, heel, toe, ankle, knee, barHeight, tibiaAngle, barLimit } = deadliftFrame(body, task, coord)
   const trunkShape = buildTrunkShape(a, coord.spineFlexion)
 
   let reachable = true
@@ -381,6 +400,7 @@ export function solveDeadlift(a: Anthropometry, task: Task, coord: Coordination)
   }
 
   return {
+    stance,
     posture,
     angles,
     kinetics,
@@ -397,18 +417,22 @@ export function solveDeadlift(a: Anthropometry, task: Task, coord: Coordination)
   }
 }
 
-export function solveSquat(a: Anthropometry, task: Task, coord: Coordination): Frame {
+export function solveSquat(body: Anthropometry, task: Task, coord: Coordination): Frame {
+  const stance = getStance('squat', body, coord, task.progress)
+  const a = projectedBody(body, stance)
+  const bottom = projectedBody(body, getStance('squat', body, coord, 0))
+  const standing = projectedBody(body, getStance('squat', body, coord, 1))
   const { heel, toe, ankle } = footPoints(a)
   const tibiaAngle = squatTibiaAngle(a, task.progress, coord.kneeTravel)
   const knee = add(ankle, fromPolar(rad(90 - tibiaAngle), a.shank))
   const trunkShape = buildTrunkShape(a, coord.spineFlexion)
 
-  const bottomHip = squatBottomHipHeight(a, task.depth, coord.kneeTravel)
+  const bottomHip = squatBottomHipHeight(bottom, task.depth, coord.kneeTravel)
   // Measured up from the standing knee rather than from the landmark table:
   // with the shin leaning as it does when standing, the table height would ask
   // the femur to span more than its own length.
   const standingHip =
-    ankleHeight(a) + a.shank * Math.cos(rad(standingTibiaAngle(a))) + a.thigh
+    ankleHeight(standing) + standing.shank * Math.cos(rad(standingTibiaAngle(standing))) + standing.thigh
   const hipHeight = lerp(bottomHip, standingHip, task.progress)
 
   const dy = hipHeight - knee.y
@@ -470,6 +494,7 @@ export function solveSquat(a: Anthropometry, task: Task, coord: Coordination): F
   }
 
   return {
+    stance,
     posture,
     angles,
     kinetics,

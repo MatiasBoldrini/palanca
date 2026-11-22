@@ -1,16 +1,17 @@
 # Palanca
 
-Laboratorio interactivo de **peso muerto, press de banca y sentadilla**. Girá el cuerpo en 3D y seguí las fuerzas, los momentos articulares y los brazos de palanca durante cada repetición.
+Laboratorio interactivo de **peso muerto, press de banca y sentadilla**. Cambiá la apertura de los pies, el agarre o las proporciones del cuerpo y seguí en 3D cómo se modifican la postura, el recorrido de la barra y los momentos articulares.
 
-![Fuerzas y momentos en el despegue del peso muerto](docs/peso-muerto.png)
+![Peso muerto sumo en el despegue, con la comparación frente al convencional](docs/sumo.png)
 
 ## Explorar un levantamiento
 
-1. Elegí un ejercicio y usá los botones bajo el recorrido para comparar la posición baja, la mitad y el bloqueo. También podés reproducir la repetición, pausarla o verla a media velocidad.
-2. **Fuerzas** dibuja flechas rectas desde el punto de aplicación. El peso corporal y el de la barra apuntan hacia abajo. En los levantamientos de pie, la reacción total del suelo apunta hacia arriba. En banca se distinguen el apoyo del banco y el de los pies.
-3. **Momentos** dibuja arcos alrededor de cada articulación. Su sentido indica el giro interno necesario para equilibrar la postura. Elegí una articulación para aislarla y mostrar la distancia perpendicular a la vertical de la carga.
-4. En **Press de banca**, pausá en el pecho, seleccioná el hombro y variá el ancho de agarre. La vista desde los pies permite ver la separación lateral entre la mano y el hombro. Las curvas muestran la magnitud del momento total de cada articulación por brazo.
-5. Cambiá entre músculos y esqueleto o abrí el diagrama 2D en la misma postura. En **Ajustes** podés editar la carga o copiar un enlace a la posición con sus capas de biomecánica.
+1. En **Peso muerto**, pausá en **Despegue** y alterná entre **Convencional** y **Sumo**. Mirá de frente para ver dónde quedan las manos respecto de las rodillas. De perfil podés seguir la inclinación del tronco y la distancia de la cadera a la vertical de la barra.
+2. En **Sentadilla**, elegí **Fondo** y abrí la base con el deslizador. **Comparar posturas** dibuja los dos perfiles a la misma escala y en el mismo porcentaje del recorrido alcanzable. El tramo violeta une la cadera con la vertical de la barra. **Seguir cadera** o **Seguir rodilla** identifica la articulación en el dibujo.
+3. En **Press de banca**, pausá en **Pecho** y variá el ancho de agarre. La vista desde los pies muestra la separación lateral entre la mano y el hombro. Los arcos siguen los momentos de hombro, codo y muñeca, por brazo.
+4. **Reparto de carga** muestra el peso de la barra sobre el cuerpo y la reacción en cada apoyo. Cada flecha nace en el punto marcado y apunta en el sentido de la fuerza. Podés aislar la barra, el cuerpo o los apoyos. Al desactivar el reparto aparecen las fuerzas externas sobre el conjunto cuerpo y barra.
+5. Activá **Ajustar cuerpo** y tocá un segmento para modificar sus medidas. Por ejemplo, alargá el fémur y observá la posición de la cadera a la misma altura de barra. **Ver fuerzas al ajustar** mantiene visibles los vectores durante la edición.
+6. Podés girar el modelo, explorar los grupos musculares por selección, cambiar al esqueleto o al diagrama 2D y copiar un enlace desde **Ajustes**. El enlace conserva las medidas, las variantes y los anchos de base.
 
 ![Press de banca con las fuerzas y momentos sobre la anatomía](docs/banca.png)
 
@@ -20,7 +21,9 @@ El modelo equilibra cada postura con fuerzas verticales y expresa la demanda int
 
 En banca cada mano sostiene la mitad del peso de la barra. El modelo usa un apoyo vertical equivalente bajo los hombros y otro entre los pies. Las mediciones de un press real también incluyen aceleración y fuerzas horizontales que varían con el agarre. [Larsen y colaboradores (2021)](https://pubmed.ncbi.nlm.nih.gov/33554113/)
 
-El color muscular ilustra la demanda relativa de la articulación asociada en distintos puntos del recorrido. La fuerza de cada músculo y su activación eléctrica requieren información adicional. Las mallas se sirven junto con la aplicación y el diagrama 2D sigue disponible si falla WebGL. [Fuentes y licencias del atlas](public/anatomy/creditos.html)
+La apertura se mide entre los centros de los pies. El modelo gira los pies hacia afuera y modifica la posición lateral de las rodillas y la longitud proyectada de los segmentos. Calcula las palancas de perfil y supone apoyo simétrico. En una persona también intervienen fuerzas laterales y momentos en otros planos. Para contrastar estas simplificaciones con mediciones experimentales, ver los estudios sobre [peso muerto convencional y sumo](https://pubmed.ncbi.nlm.nih.gov/10912892/) y [distintas aperturas en sentadilla](https://pubmed.ncbi.nlm.nih.gov/30026952/).
+
+El atlas permite seleccionar un grupo para estudiar su función durante el movimiento. El color anatómico se mantiene durante la repetición. Las mallas se sirven junto con la aplicación y el diagrama 2D sigue disponible si falla WebGL. [Fuentes y licencias del atlas](public/anatomy/creditos.html)
 
 ![Sentadilla con la palanca de la rodilla](docs/sentadilla.png)
 

@@ -2,8 +2,7 @@ import { Bone, Matrix4, Vector3 } from 'three'
 import type { Anthropometry } from '../model/anthropometry'
 import type { Vec2 } from '../model/geometry'
 import { jointLateralOffset } from '../model/jointLandmarks'
-import type { ExerciseId } from '../model/lift'
-import type { Posture } from '../model/posture'
+import type { ExerciseId, Frame } from '../model/lift'
 
 const v = (x: number, y: number, z = 0) => new Vector3(x, y, z)
 const world = (p: Vec2, z = 0) => v(p.x, p.y, z)
@@ -14,9 +13,10 @@ function landmark(lateral: number, anterior: number, height: number) {
   return v((anterior - 75) / 1000, (height + 72) / 1000, -lateral / 1000)
 }
 
-function axisFrame(start: Vector3, end: Vector3) {
+function axisFrame(start: Vector3, end: Vector3, roll = 0) {
   const axis = end.clone().sub(start).normalize()
   const front = v(axis.y, -axis.x, 0).normalize()
+  if (roll) front.applyAxisAngle(axis, roll)
   const side = front.clone().cross(axis).normalize()
   return new Matrix4().makeBasis(front, axis, side).setPosition(start)
 }
@@ -65,6 +65,31 @@ const sides = [limbLinks(1), limbLinks(-1)]
 
 export { axial as restSpine, sides as restLimbs }
 
+/** Three-dimensional landmarks used to pose and select the same arm. */
+export function armLandmarks(frame: Frame, a: Anthropometry, exercise: ExerciseId, side: number) {
+  const p = frame.posture
+  const stance = frame.stance
+  const squat = exercise === 'squat'
+  const shoulder = world(p.shoulder, side * stance.shoulderHalf)
+  const elbow = world(p.elbow, side * stance.elbowHalf)
+  const grip = world(p.hand, side * stance.gripHalf)
+  if (squat) {
+    // The solver gives a sagittal elbow direction. Lift it into the plane
+    // of the wide grip and close the shoulder–elbow–grip chain in 3D.
+    const axis = grip.clone().sub(shoulder)
+    const distance = Math.max(0.001, axis.length())
+    axis.divideScalar(distance)
+    const upper = a.arm * 0.52,
+      lower = a.arm - upper
+    const along = (upper * upper - lower * lower + distance * distance) / (2 * distance)
+    const radius = Math.sqrt(Math.max(0, upper * upper - along * along))
+    const direction = elbow.clone().sub(shoulder)
+    direction.addScaledVector(axis, -direction.dot(axis)).normalize()
+    elbow.copy(shoulder).addScaledVector(axis, along).addScaledVector(direction, radius)
+  }
+  return { shoulder, elbow, grip }
+}
+
 export function createRig(bones: Bone[]) {
   const byName = new Map<string, Bone[]>()
   for (const bone of bones) {
@@ -79,12 +104,13 @@ export function createRig(bones: Bone[]) {
       bone.matrixWorldNeedsUpdate = true
     }
   }
-  function segment(ref: Link, from: Vector3, to: Vector3, width: number) {
-    const basis = axisFrame(from, to)
+  function segment(ref: Link, from: Vector3, to: Vector3, width: number, roll = 0) {
+    const basis = axisFrame(from, to, roll)
     basis.scale(v(width, from.distanceTo(to) / ref.length, width))
     apply(ref.name, basis.multiply(ref.inverseRest))
   }
-  return (p: Posture, a: Anthropometry, exercise: ExerciseId) => {
+  return (frame: Frame, a: Anthropometry, exercise: ExerciseId) => {
+    const { posture: p, stance } = frame
     const scale = a.height / 1.71
     const chain = [
       p.hip,
@@ -96,44 +122,27 @@ export function createRig(bones: Bone[]) {
       p.headTop,
     ].map((point) => world(point))
     for (let i = 0; i < axial.length; i++) segment(axial[i], chain[i], chain[i + 1], scale)
-    const squat = exercise === 'squat'
     for (const ref of sides) {
-      const lateral = -ref.mirror * scale
-      const ankle = world(p.ankle, -ref.mirror * jointLateralOffset('ankle', exercise, a.height))
-      const knee = world(p.knee, -ref.mirror * jointLateralOffset('knee', exercise, a.height))
-      const hip = world(p.hip, -ref.mirror * jointLateralOffset('hip', exercise, a.height))
-      const shoulder = world(p.shoulder, lateral * 0.162)
-      const elbow = world(p.elbow, lateral * (squat ? 0.357 : 0.201))
-      const grip = world(p.hand, lateral * (squat ? 0.35 : 0.218))
-      if (squat) {
-        // The solver gives a sagittal elbow direction. Lift it into the plane
-        // of the wide grip and close the shoulder–elbow–grip chain in 3D.
-        const axis = grip.clone().sub(shoulder)
-        const distance = Math.max(0.001, axis.length())
-        axis.divideScalar(distance)
-        const upper = a.arm * 0.52,
-          lower = a.arm - upper
-        const along = (upper * upper - lower * lower + distance * distance) / (2 * distance)
-        const radius = Math.sqrt(Math.max(0, upper * upper - along * along))
-        const direction = elbow.clone().sub(shoulder)
-        direction.addScaledVector(axis, -direction.dot(axis)).normalize()
-        elbow.copy(shoulder).addScaledVector(axis, along).addScaledVector(direction, radius)
-      }
+      const ankle = world(p.ankle, -ref.mirror * jointLateralOffset('ankle', stance))
+      const knee = world(p.knee, -ref.mirror * jointLateralOffset('knee', stance))
+      const hip = world(p.hip, -ref.mirror * jointLateralOffset('hip', stance))
+      const { shoulder, elbow, grip } = armLandmarks(frame, a, exercise, -ref.mirror)
       // A closed hand rotates around the bar's transverse axis. The wrist stays
       // on the elbow side of the shaft for both the pull and the squat grip.
       const towardElbow = v(elbow.x - grip.x, elbow.y - grip.y, 0).normalize()
       const wrist = grip.clone().addScaledVector(towardElbow, ref.hand.length * scale)
-      segment(ref.thigh, knee, hip, scale)
-      segment(ref.shin, ankle, knee, scale)
+      const legRoll = ref.mirror * stance.toeOutRad
+      segment(ref.thigh, knee, hip, scale, legRoll)
+      segment(ref.shin, ankle, knee, scale, legRoll)
       segment(ref.upperArm, elbow, shoulder, scale)
       segment(ref.forearm, wrist, elbow, scale)
       segment(ref.hand, grip, wrist, scale)
-      const footScale = v((p.toe.x - p.heel.x) / 0.215, p.ankle.y / ref.ankle.y, scale)
-      const offset = ref.ankle.clone().multiply(footScale).negate().add(ankle)
-      apply(
-        'foot' + ref.side,
-        new Matrix4().makeScale(footScale.x, footScale.y, footScale.z).setPosition(offset),
-      )
+      // Rotate about the ankle. The sagittal heel/toe span already contains
+      // cos(toe-out); use the anatomical length when building the rotated sole.
+      const foot = new Matrix4().makeRotationY(legRoll)
+      foot.scale(v(a.foot / 0.215, p.ankle.y / ref.ankle.y, scale))
+      const offset = ref.ankle.clone().applyMatrix4(foot).negate().add(ankle)
+      apply('foot' + ref.side, foot.setPosition(offset))
     }
   }
 }

@@ -1,6 +1,6 @@
 import { Vector3, type OrthographicCamera } from 'three'
 import type { JointKey } from '../model/kinetics'
-import type { ExerciseId, Frame, Task } from '../model/lift'
+import type { Frame, Task } from '../model/lift'
 import {
   buildMechanicsOverlay,
   formatBarArm,
@@ -19,7 +19,7 @@ const shortForces = { bar: 'Barra', body: 'Cuerpo', ground: 'Suelo' }
 const startAngles = { l5s1: 35, hip: 135, knee: -100, ankle: -35 }
 const radii = { l5s1: 0.045, hip: 0.061, knee: 0.059, ankle: 0.048 }
 const fullSweep = (260 / 180) * Math.PI
-export const FORCE_LENGTH_IN_HEIGHTS = 0.27
+export const FORCE_LENGTH_IN_HEIGHTS = 0.32
 
 type Point = { x: number; y: number }
 type ForceId = OverlayForce['id']
@@ -27,7 +27,6 @@ type LabelId = JointKey | ForceId
 type DrawingProps = {
   frame: Frame
   task: Task
-  exercise: ExerciseId
   mechanics: MechanicsView
   peakMoment: number
   anthro: { height: number }
@@ -103,6 +102,60 @@ function arrow(group: SVGElement, className: string) {
   }
 }
 
+/** A single silhouette ends exactly at the projected tip. The inner chevrons
+ * repeat its direction when the shaft is long enough to keep them legible. */
+export function forceGlyphPaths(origin: Point, tip: Point) {
+  const dx = tip.x - origin.x
+  const dy = tip.y - origin.y
+  const length = Math.hypot(dx, dy)
+  if (length < 0.5) return { body: '', chevrons: '' }
+  const ux = dx / length
+  const uy = dy / length
+  const point = (along: number, across: number): Point => ({
+    x: origin.x + ux * along - uy * across,
+    y: origin.y + uy * along + ux * across,
+  })
+  const head = Math.min(16, length * 0.57)
+  const shoulder = length - head
+  const halfHead = head * 0.64
+  const halfShaft = Math.min(3.7, halfHead * 0.52)
+  const body =
+    polyline([
+      point(0, -halfShaft),
+      point(shoulder, -halfShaft),
+      point(shoulder, -halfHead),
+      tip,
+      point(shoulder, halfHead),
+      point(shoulder, halfShaft),
+      point(0, halfShaft),
+    ]) + 'Z'
+  const count = shoulder < 19 ? 0 : shoulder < 66 ? 1 : 2
+  let chevrons = ''
+  for (let i = 1; i <= count; i++) {
+    const at = 4 + ((shoulder - 4) * i) / (count + 1)
+    chevrons += polyline([point(at - 1.8, -2.6), point(at + 1.8, 0), point(at - 1.8, 2.6)])
+  }
+  return { body, chevrons }
+}
+
+/** The ring stays on the real landmark even when the shaft has to shift to
+ * distinguish two collinear forces. The witness joins its origin to the ring. */
+export function createForceGlyph(parent: SVGGElement) {
+  const witness = element(parent, 'path', { class: 'force-glyph-witness' })
+  const body = element(parent, 'path', { class: 'mechanics-vector force-glyph-body' })
+  const chevrons = element(parent, 'path', { class: 'force-glyph-chevrons' })
+  const ring = element(parent, 'circle', { r: 4, class: 'force-glyph-origin' })
+  return (origin: Point, tip: Point, offsetX = 0) => {
+    const start = { x: origin.x + offsetX, y: origin.y }
+    const end = { x: tip.x + offsetX, y: tip.y }
+    const paths = forceGlyphPaths(start, end)
+    body.setAttribute('d', paths.body)
+    chevrons.setAttribute('d', paths.chevrons)
+    witness.setAttribute('d', offsetX && paths.body ? polyline([origin, start]) : '')
+    place(ring, origin)
+  }
+}
+
 function makeLabel(parent: SVGElement, leaders: SVGElement, id: LabelId, color: string) {
   const leader = element(leaders, 'path', { class: 'mechanics-leader', stroke: color })
   const group = element(parent, 'g', { 'data-label-for': id, color })
@@ -126,13 +179,15 @@ type Annotation = { label: Label; anchor: Point; width: number; height: number; 
 function layout(entries: Annotation[], left: boolean, w: number, h: number, landmarks: Point[]) {
   entries.sort((a, b) => a.anchor.y - b.anchor.y)
   const pad = w < 400 ? 4 : 10
+  // The camera controls can extend a few pixels into the drawing on narrow screens.
+  const bottomPad = Math.max(11, pad)
   const top = Math.min(34, Math.max(3, h - entries.reduce((n, e) => n + e.height + 3, 0) - pad))
   let limit = top
   for (const e of entries) {
-    e.y = Math.max(limit, Math.min(h - e.height - pad, e.anchor.y - e.height / 2))
+    e.y = Math.max(limit, Math.min(h - e.height - bottomPad, e.anchor.y - e.height / 2))
     limit = e.y + e.height + 3
   }
-  limit = h - pad
+  limit = h - bottomPad
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
     e.y = Math.min(e.y, limit - e.height)
@@ -144,7 +199,7 @@ function layout(entries: Annotation[], left: boolean, w: number, h: number, land
     const margin = Math.max(pad, (w - 670) / 2)
     const x = left ? margin : w - margin - e.width
     const near = landmarks.filter((p) => p.x >= x - 5 && p.x <= x + e.width + 5)
-    const last = h - remaining - pad
+    const last = h - remaining - bottomPad
     const preferred = Math.max(limit, Math.min(last, e.y))
     const overlaps = (y: number) => near.some((p) => p.y >= y - 5 && p.y <= y + e.height + 5)
     e.y = preferred
@@ -194,17 +249,19 @@ export function createMechanicsDrawing(host: HTMLElement, select: (id: JointKey)
   const gravityLine = element(lever, 'path', { class: 'mechanics-gravity-line' })
   const dimension = element(lever, 'path')
   const shapes = element(svg, 'g')
+  const forceShapes = element(svg, 'g')
   const cards = element(svg, 'g')
   const forceNodes = new Map(
     forces.map((id) => {
-      const group = element(shapes, 'g', { 'data-force': id, color: inks[id] })
-      const offsetLine = element(group, 'path', { class: 'mechanics-offset' })
-      const trace = arrow(group, 'mechanics-vector')
-      const pivot = element(group, 'circle', { class: 'mechanics-force-origin', r: 3.1 })
-      return [
-        id,
-        { group, offsetLine, trace, pivot, label: makeLabel(cards, leaders, id, inks[id]) },
-      ]
+      const group = element(forceShapes, 'g', { 'data-force': id, color: inks[id] })
+      const label = makeLabel(cards, leaders, id, inks[id])
+      const kind = id === 'ground' ? 'support' : id
+      for (const node of [group, label.group, label.leader]) node.setAttribute('data-force-kind', kind)
+      label.group.setAttribute('role', 'img')
+      label.extra.classList.add('force-label-direction')
+      label.extra.setAttribute('x', '22')
+      const direction = element(label.group, 'path', { class: 'force-label-icon' })
+      return [id, { group, glyph: createForceGlyph(group), label, direction }]
     }),
   )
   const momentNodes = new Map(
@@ -231,8 +288,14 @@ export function createMechanicsDrawing(host: HTMLElement, select: (id: JointKey)
   const scratch = new Vector3()
   let nearSide: 1 | -1 = 1
 
-  function draw(props: DrawingProps, camera: OrthographicCamera, w: number, h: number) {
-    const { frame, task, exercise, mechanics: view, anthro } = props
+  function draw(
+    props: DrawingProps,
+    camera: OrthographicCamera,
+    w: number,
+    h: number,
+    contactLandmarks: readonly Point[] = [],
+  ) {
+    const { frame, task, mechanics: view, anthro } = props
     shown(svg, view.forces || view.moments || (view.lever && view.joint !== 'all'))
     if (svg.style.display === 'none') return
     camera.getWorldDirection(scratch)
@@ -243,15 +306,13 @@ export function createMechanicsDrawing(host: HTMLElement, select: (id: JointKey)
     const { forces: loads, moments } = buildMechanicsOverlay(
       frame,
       task,
-      exercise,
-      anthro.height,
       nearSide,
     )
     function project(p: WorldPoint): Point {
       scratch.set(p.x, p.y, p.z).project(camera)
       return { x: ((scratch.x + 1) * w) / 2, y: ((1 - scratch.y) * h) / 2 }
     }
-    const landmarks: Point[] = []
+    const landmarks: Point[] = [...contactLandmarks]
     const compact = w < 480
     const left: Annotation[] = [],
       right: Annotation[] = []
@@ -259,34 +320,54 @@ export function createMechanicsDrawing(host: HTMLElement, select: (id: JointKey)
       const p = load.anchor
       const length =
         (anthro.height * FORCE_LENGTH_IN_HEIGHTS * load.verticalN) / frame.kinetics.systemWeight
-      return { load, origin: project(p), tip: project({ ...p, y: p.y + length }) }
+      const visible = view.forces && (!view.loadPath || load.id === 'body')
+      return { load, visible, origin: project(p), tip: project({ ...p, y: p.y + length }) }
     })
-    for (const { load, origin, tip } of projectedLoads) {
+    const lanes: { x: number; top: number; bottom: number }[] = []
+    for (const { load, visible, origin, tip } of projectedLoads) {
       const n = forceNodes.get(load.id)!
-      shown(n.group, view.forces)
-      shown(n.label.group, view.forces)
-      shown(n.label.leader, view.forces)
-      if (!view.forces) continue
-      // Collinear forces retain their line of action via a short witness
-      // from the true origin to the parallel shaft (e.g. in anterior view).
-      const overlaps = projectedLoads.some(
-        (other) =>
-          other.load.id !== load.id &&
-          Math.abs(other.origin.x - origin.x) < 6 &&
-          Math.min(Math.max(origin.y, tip.y), Math.max(other.origin.y, other.tip.y)) -
-            Math.max(Math.min(origin.y, tip.y), Math.min(other.origin.y, other.tip.y)) >
-            4,
+      shown(n.group, visible)
+      shown(n.label.group, visible)
+      shown(n.label.leader, visible)
+      if (!visible) continue
+      const top = Math.min(origin.y, tip.y)
+      const bottom = Math.max(origin.y, tip.y)
+      const space = 24
+      // Leave the central line fixed for the first vector. If two projected
+      // glyphs touch, slide the next one just far enough to uncover its tip.
+      const conflicts = lanes.filter((lane) => bottom + 5 > lane.top && top - 5 < lane.bottom)
+      const candidates = [
+        origin.x,
+        ...conflicts.flatMap((lane) => [lane.x - space, lane.x + space]),
+      ]
+      const clear = candidates.filter((x) =>
+        conflicts.every((lane) => Math.abs(lane.x - x) >= space - 0.01),
       )
-      const shift = overlaps ? { bar: -5, body: 5, ground: 0 }[load.id] : 0
-      const start = { x: origin.x + shift, y: origin.y }
-      const end = { x: tip.x + shift, y: tip.y }
-      n.trace(load.verticalN ? [start, end] : [], 12)
-      landmarks.push(origin, end)
-      n.offsetLine.setAttribute('d', shift ? polyline([origin, start]) : '')
-      place(n.pivot, origin)
+      const x = clear.reduce(
+        (best, value) => (Math.abs(value - origin.x) < Math.abs(best - origin.x) ? value : best),
+        clear[0] ?? origin.x,
+      )
+      if (load.verticalN) lanes.push({ x, top, bottom })
+      n.glyph(origin, tip, x - origin.x)
+      const end = { x, y: tip.y }
+      landmarks.push(origin, end, { x: x - 9, y: tip.y }, { x: x + 9, y: tip.y })
+      const sense = Math.sign(load.verticalN)
+      const direction = sense > 0 ? 'Hacia arriba' : sense < 0 ? 'Hacia abajo' : 'Sin fuerza'
       text(n.label.name, compact ? shortForces[load.id] : load.label)
       text(n.label.value, formatForce(load.verticalN))
-      left.push({ label: n.label, anchor: origin, width: compact ? 71 : 116, height: 35, y: 0 })
+      text(n.label.extra, direction)
+      n.label.group.setAttribute(
+        'aria-label',
+        load.label + ', ' + formatForce(load.verticalN) + ', ' + direction,
+      )
+      const icon =
+        sense > 0
+          ? 'M14 43V35m-3.5 3.5L14 35l3.5 3.5'
+          : sense < 0
+            ? 'M14 35v8m-3.5-3.5L14 43l3.5-3.5'
+            : 'M11 39h6'
+      n.direction.setAttribute('d', icon)
+      left.push({ label: n.label, anchor: origin, width: compact ? 84 : 120, height: 48, y: 0 })
     }
     const maxMoment = Math.max(1, props.peakMoment, ...moments.map((m) => Math.abs(m.momentNm)))
     shown(lever, view.lever && view.joint !== 'all')

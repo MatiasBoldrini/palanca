@@ -84,7 +84,7 @@ export function PatternPanel({ accent }: { accent: string }) {
               { at: 0, label: 'tensor' },
               { at: 15, label: 'hombro adelante' },
             ]}
-            hint="En 0 el brazo cuelga vertical y no aguanta nada más que tracción, que es lo que pasa con cargas altas. Cada grado adelanta el hombro respecto de la barra y aparece un momento de hombro: la barra sólo puede empujar la mano hacia arriba, así que ese desfase lo sostienen dorsales y hombro posterior."
+            hint="En 0 el brazo cuelga vertical y no aguanta nada más que tracción, que es lo que pasa con cargas altas. Cada grado adelanta el hombro respecto de la barra y aparece un momento de hombro: la barra tira de la mano hacia abajo y aumenta la palanca respecto del hombro."
           />
         )}
         {state.exercise === 'squat' && (
@@ -289,10 +289,10 @@ export function ModelNotes() {
     <Section title="Qué asume este modelo">
       <ul className="notes">
         <li>
-          Es un modelo <strong>plano y cuasi-estático</strong>: resuelve el equilibrio instante a
-          instante, sin velocidad ni inercia. Sirve para peso muerto convencional y sentadilla con
-          stance estrecho o medio. Para sumo o stance ancho, Escamilla midió errores de 16 a 18 cm en
-          los brazos de palanca al analizar en 2D.
+          La apertura de pies cambia la postura en tres dimensiones. El modelo calcula el
+          equilibrio con fuerzas verticales y muestra los <strong>momentos en el plano
+          sagital</strong>, visibles de perfil. El giro de los pies y la apertura de rodillas
+          siguen un patrón simétrico. Las fuerzas laterales y la aceleración quedan fuera del cálculo.
         </li>
         <li>
           Cadera, rodilla y tobillo se informan <strong>por pierna</strong>. L5/S1 es una sola
@@ -300,10 +300,9 @@ export function ModelNotes() {
         </li>
         <li>
           El <strong>trabajo del levantamiento</strong> es la energía potencial que gana el
-          conjunto cuerpo más barra del fondo al final. Lo manda la carga, no la técnica: cambiar
-          la coordinación lo mueve un puñado de joules, porque llevás tu propio cuerpo un poco más
-          arriba o más abajo. Lo que la técnica sí cambia es <em>dónde</em> cae ese costo, y eso es
-          lo que muestran los colores del esqueleto.
+          conjunto cuerpo más barra del fondo al final. Depende del peso y de la altura que gana
+          cada masa. Podés comparar por separado cómo cambia el momento de cadera, rodilla y
+          tobillo a medida que la barra se aleja o se acerca a cada articulación.
         </li>
         <li>
           Masas y centros de masa vienen de la tabla 4.1 de Winter (Dempster); las longitudes, de

@@ -12,6 +12,7 @@ import { angleBetween, dist } from './geometry'
 import {
   DEFAULT_TASK,
   type ExerciseId,
+  type Frame,
   deadliftBarLimit,
   simulateSeries,
   solveDeadlift,
@@ -20,6 +21,13 @@ import {
 } from './lift'
 import { type ParamId, type Setup, feasibleRange, nearestFeasibleProgress, patchFor } from './interact'
 import { type TrunkShape, buildTrunkShape } from './posture'
+
+function limbLength(f: Frame, segment: 'shank' | 'thigh' | 'arm') {
+  const p = f.posture, z = f.stance
+  if (segment === 'arm') return Math.hypot(dist(p.shoulder, p.hand), z.gripHalf - z.shoulderHalf)
+  if (segment === 'shank') return Math.hypot(dist(p.ankle, p.knee), z.kneeHalf - z.ankleHalf)
+  return Math.hypot(dist(p.knee, p.hip), z.hipHalf - z.kneeHalf)
+}
 
 /** Mean subject from Edington et al. (2018), Sports 6(3):90. */
 const EDINGTON: Anthropometry = {
@@ -110,8 +118,8 @@ describe('deadlift solver', () => {
   it('produces finite, closed kinematic chains', () => {
     for (const frame of [close, far]) {
       expect(Number.isFinite(frame.posture.hip.x)).toBe(true)
-      expect(dist(frame.posture.ankle, frame.posture.knee)).toBeCloseTo(EDINGTON.shank, 6)
-      expect(dist(frame.posture.knee, frame.posture.hip)).toBeCloseTo(EDINGTON.thigh, 6)
+      expect(limbLength(frame, 'shank')).toBeCloseTo(EDINGTON.shank, 6)
+      expect(limbLength(frame, 'thigh')).toBeCloseTo(EDINGTON.thigh, 6)
     }
   })
 
@@ -305,10 +313,10 @@ describe('leaning the arm off vertical', () => {
       const f = solveDeadlift(EDINGTON, task, { ...closeBar, armLean })
       const ahead = f.posture.shoulder.x - f.posture.bar.x
       const where = `${armLean} deg`
-      expect(ahead, where).toBeCloseTo(EDINGTON.arm * Math.sin((armLean * Math.PI) / 180), 6)
+      expect(ahead, where).toBeCloseTo(f.stance.sagittalArm * Math.sin((armLean * Math.PI) / 180), 6)
       // The hand stays on the bar and the arm keeps its length: leaning it is a
       // rotation about the grip, not a stretch.
-      expect(dist(f.posture.shoulder, f.posture.hand), where).toBeCloseTo(EDINGTON.arm, 6)
+      expect(limbLength(f, 'arm'), where).toBeCloseTo(EDINGTON.arm, 6)
       expect(f.feasible, where).toBe(true)
     }
   })
@@ -326,7 +334,7 @@ describe('leaning the arm off vertical', () => {
   })
 
   it('makes the shoulder cost grow with both the lean and the load', () => {
-    let previous = 0
+    let previous = -Infinity
     for (const armLean of [0, 3, 6, 10, 15]) {
       const m = solveDeadlift(EDINGTON, task, { ...closeBar, armLean }).kinetics.shoulderMoment
       expect(m, `${armLean} deg`).toBeGreaterThan(previous)
@@ -409,10 +417,10 @@ describe('lockout', () => {
 
   it('keeps the drawn limbs at their true length while doing it', () => {
     const top = solveDeadlift(EDINGTON, { ...task, progress: 1 }, closeBar)
-    expect(dist(top.posture.ankle, top.posture.knee)).toBeCloseTo(EDINGTON.shank, 6)
-    expect(dist(top.posture.knee, top.posture.hip)).toBeCloseTo(EDINGTON.thigh, 6)
+    expect(limbLength(top, 'shank')).toBeCloseTo(EDINGTON.shank, 6)
+    expect(limbLength(top, 'thigh')).toBeCloseTo(EDINGTON.thigh, 6)
     // The arm may absorb the tolerance, but only a hair of it.
-    expect(dist(top.posture.shoulder, top.posture.hand)).toBeCloseTo(EDINGTON.arm, 2)
+    expect(limbLength(top, 'arm')).toBeCloseTo(EDINGTON.arm, 2)
   })
 })
 
@@ -535,8 +543,8 @@ describe('control ranges', () => {
           // Bones do not stretch. A chain that failed to close draws itself
           // with the wrong segment lengths, which is what "the figure broke"
           // looks like on screen.
-          expect(dist(frame.posture.ankle, frame.posture.knee), where).toBeCloseTo(s.anthro.shank, 6)
-          expect(dist(frame.posture.knee, frame.posture.hip), where).toBeCloseTo(s.anthro.thigh, 6)
+          expect(limbLength(frame, 'shank'), where).toBeCloseTo(s.anthro.shank, 6)
+          expect(limbLength(frame, 'thigh'), where).toBeCloseTo(s.anthro.thigh, 6)
         }
       }
     }
@@ -593,7 +601,7 @@ describe('squat solver', () => {
     for (let i = 0; i <= 10; i++) {
       const frame = solveSquat(a, { ...squatTask, progress: i / 10 }, highBar)
       expect(frame.kinetics.com.x).toBeCloseTo(0, 3)
-      expect(dist(frame.posture.knee, frame.posture.hip)).toBeCloseTo(a.thigh, 6)
+      expect(limbLength(frame, 'thigh')).toBeCloseTo(a.thigh, 6)
     }
   })
 

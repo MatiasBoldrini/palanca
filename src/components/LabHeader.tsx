@@ -81,7 +81,7 @@ export function LabFooter({ bench = false }: { bench?: boolean }) {
         <Activity size={15} aria-hidden />
         {bench
           ? 'Modelo bilateral simétrico y cuasiestático.'
-          : 'Modelo biomecánico sagital y cuasiestático.'}
+          : 'Base de apoyo en 3D y momentos sagitales en equilibrio.'}
       </span>
       <a href={import.meta.env.BASE_URL + 'anatomy/creditos.html'} target="_blank" rel="noreferrer">
         Créditos del atlas 3D

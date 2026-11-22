@@ -38,3 +38,23 @@ export function benchForces(frame: BenchFrame) {
     },
   ]
 }
+
+/** Free-body diagram of the lifter. Split bilateral resultants at the actual contacts. */
+export function benchContactForces(frame: BenchFrame) {
+  const [bar, body, bench, feet] = benchForces(frame)
+  const hands = frame.arms.map((arm, i) => ({
+    ...bar,
+    id: i === 0 ? ('hand-positive' as const) : ('hand-negative' as const),
+    label: 'Barra sobre la mano',
+    anchor: arm.grip,
+    verticalN: bar.verticalN / 2,
+  }))
+  const footContacts = frame.pose.legs.map((leg, i) => ({
+    ...feet,
+    id: i === 0 ? ('foot-positive' as const) : ('foot-negative' as const),
+    label: 'Suelo sobre el pie',
+    anchor: { ...feet.anchor, z: leg.ankle.z },
+    verticalN: feet.verticalN / 2,
+  }))
+  return [...hands, body, bench, ...footContacts]
+}

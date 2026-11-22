@@ -51,7 +51,6 @@ export function MuscleAtlas({
       <h2 className="rail-title" id="muscle-title" tabIndex={-1}>
         <BookOpen size={18} aria-hidden /> Atlas muscular
       </h2>
-      <p className="color-note"><span className="demand-scale" aria-hidden />El tono cálido sigue el momento que corresponde a la función del grupo, en relación con el máximo de esa articulación en la repetición. Es una guía de demanda articular.</p>
       {current && selected ? (
         <div className="muscle-detail">
           <button className="atlas-back" onClick={() => onSelect(null)}>

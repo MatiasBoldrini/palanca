@@ -2,8 +2,8 @@ import { useId, type ReactNode } from 'react'
 import { Vector3 } from 'three'
 import type { OrthographicCamera } from 'three'
 import type { BenchFrame, BenchJointId, BenchPoint } from '../model/bench'
-import { benchForces } from '../model/benchOverlay'
-import type { BenchPeaks } from '../anatomy/benchRig'
+import { benchContactForces, benchForces } from '../model/benchOverlay'
+import { forceGlyphPaths } from '../anatomy/mechanicsDrawing'
 import { formatBarArm, formatForce, formatMoment } from '../model/mechanicsOverlay'
 
 export interface BenchProjection {
@@ -14,19 +14,20 @@ export interface BenchProjection {
 export interface BenchMechanicsProps {
   frame: BenchFrame
   showForces: boolean
+  showLoadPath: boolean
   showMoments: boolean
   joint: BenchJointId | 'all'
   showBarArm?: boolean
-  peaks?: BenchPeaks
+  peaks?: Partial<Record<BenchJointId, number>>
   onSelectJoint?: (joint: BenchJointId) => void
 }
 const jointNames = { shoulder: 'Hombro', elbow: 'Codo', wrist: 'Muñeca' }
 const jointInk = '#754493'
 const shortNames: Record<string, string> = {
-  bar: 'Peso barra',
-  body: 'Peso cuerpo',
-  bench: 'Apoyo banco',
-  feet: 'Apoyo pies',
+  bar: 'Barra',
+  body: 'Cuerpo',
+  bench: 'Banco',
+  feet: 'Pies',
 }
 const allJoints: BenchJointId[] = ['shoulder', 'elbow', 'wrist']
 const asVector = (at: BenchPoint) => new Vector3(at.x, at.y, at.z)
@@ -147,22 +148,22 @@ function Label({
 
 export function BenchAnnotations({
   projection,
+  vectorsOnly = false,
   frame,
   showForces,
+  showLoadPath,
   showMoments,
   joint,
   peaks,
   showBarArm,
   onSelectJoint,
-}: BenchMechanicsProps & { projection: BenchProjection }) {
+}: BenchMechanicsProps & { projection: BenchProjection; vectorsOnly?: boolean }) {
   const title = useId()
   const { camera, width, height } = projection
   const project = (at: BenchPoint) => {
     const p = asVector(at).project(camera)
     return { x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 }
   }
-  // Order labels by their actual points of application from this viewpoint.
-  const forces = benchForces(frame).sort((a, b) => project(a.anchor).x - project(b.anchor).x)
   const arm = frame.arms[camera.position.z >= 0 ? 0 : 1]
   const joints = joint === 'all' ? allJoints : [joint]
   const systemWeight = Math.abs(frame.forces.barN + frame.forces.bodyN)
@@ -172,54 +173,169 @@ export function BenchAnnotations({
     ...allJoints.map((id) => arm.moments[id].magnitudeNm),
   )
   const gap = 4
-  const forceWidth = Math.min(102, (width - 5 * gap) / 4)
+  const forceWidth = Math.min(136, (width - 5 * gap) / 4)
   const momentWidth = Math.min(113, (width - (joints.length + 1) * gap) / joints.length)
   const rowX = (i: number, n: number, w: number) => (width - n * w - (n - 1) * gap) / 2 + i * (w + gap)
   const labels: ReactNode[] = []
+  const resultants = benchForces(frame)
+  const contacts = showLoadPath ? benchContactForces(frame) : resultants
+  const contactAnchors = new Map<string, Point[]>()
+  const forceLabels: ReactNode[] = []
   const occupied: { x: number; top: number; bottom: number }[] = []
+  const cameraY = camera.getWorldDirection(new Vector3()).y
+  const axialView = Math.abs(cameraY) > 0.982
+  // Force is measured in newtons. Use a common screen scale so orbiting the
+  // camera cannot erase the vertical load through foreshortening.
+  const forceScale = Math.min(height * 0.34, width * 0.34, 146) / Math.max(1, systemWeight)
   const forceVectors =
     showForces &&
-    forces.map(({ id, verticalN: value, anchor: at, color }, i) => {
+    contacts.map(({ id, label, verticalN, anchor: at, color }) => {
       const anchor = project(at)
-      const tip = project({ ...at, y: at.y + (0.55 * value) / systemWeight })
-      const top = Math.min(anchor.y, tip.y),
-        bottom = Math.max(anchor.y, tip.y)
-      // Separate forces that project onto the same line, keeping each real
-      // application point connected to its translated arrow.
+      const group = id.startsWith('hand-') ? 'bar' : id.startsWith('foot-') ? 'feet' : id
+      const points = contactAnchors.get(group) ?? []
+      points.push(anchor)
+      contactAnchors.set(group, points)
+      const up = project({ ...at, y: at.y + 1 })
+      const length = Math.hypot(up.x - anchor.x, up.y - anchor.y)
+      const pixels = forceScale * verticalN
+      const tip = {
+        x: anchor.x + ((up.x - anchor.x) / (length || 1)) * pixels,
+        y: anchor.y + ((up.y - anchor.y) / (length || 1)) * pixels,
+      }
+      const top = axialView ? anchor.y - 10 : Math.min(anchor.y, tip.y)
+      const bottom = axialView ? anchor.y + 10 : Math.max(anchor.y, tip.y)
       const offset =
-        [0, -13, 13, -26, 26, -39, 39].find((dx) =>
+        [0, -17, 17, -34, 34, -51, 51].find((dx) =>
           occupied.every(
-            (prev) =>
-              Math.abs(prev.x - anchor.x - dx) >= 11 || bottom < prev.top - 4 || top > prev.bottom + 4,
+            (p) => Math.abs(p.x - anchor.x - dx) >= 15 || bottom < p.top - 3 || top > p.bottom + 3,
           ),
         ) ?? 0
       const start = { x: anchor.x + offset, y: anchor.y }
       tip.x += offset
       occupied.push({ x: start.x, top, bottom })
-      labels.push(
-        <Label
-          key={id}
-          x={rowX(i, 4, forceWidth)}
-          y={4}
-          width={forceWidth}
-          id={id}
-          anchor={tip}
-          value={formatForce(value)}
-          name={shortNames[id]}
-          color={color}
-          below={false}
-        />,
-      )
+      const { body, chevrons } = forceGlyphPaths(start, tip)
+      const toward = verticalN * cameraY < 0
+      const sense = verticalN === 0 ? 'fuerza nula' : verticalN > 0 ? 'hacia arriba' : 'hacia abajo'
+      const part = id.startsWith('hand-') ? ', mitad de la carga de la barra' : ''
       return (
-        <g data-force={id} key={id} color={color}>
+        <g
+          key={id}
+          data-force={id}
+          data-force-kind={group === 'feet' || group === 'bench' ? 'support' : group}
+          data-vertical-n={verticalN}
+          color={color}
+          aria-label={label + ', ' + formatForce(verticalN) + ' ' + sense + part}
+        >
+          <title>{label + ' · ' + formatForce(verticalN) + ' ' + sense + part}</title>
           {offset !== 0 && <path className="mechanics-offset" d={pathOf([anchor, start])} />}
-          <Arrow points={[start, tip]} className="mechanics-vector" />
-          <circle cx={anchor.x} cy={anchor.y} r={3} className="mechanics-force-origin" />
+          {axialView && verticalN !== 0 ? (
+            <g className="bench-depth-cue" transform={`translate(${start.x},${start.y})`}>
+              <circle r="8.2" className="bench-depth-ring" />
+              {toward ? <circle r="2.8" fill="currentColor" /> : <path d="M-3,-3 L3,3 M3,-3 L-3,3" />}
+            </g>
+          ) : (
+            <>
+              <path d={body} className="force-glyph-body" />
+              <path d={chevrons} className="force-glyph-chevrons" />
+            </>
+          )}
+          {(!axialView || offset !== 0 || verticalN === 0) && (
+            <circle cx={anchor.x} cy={anchor.y} r={3.8} className="force-glyph-origin" />
+          )}
         </g>
       )
     })
+  if (showForces && !vectorsOnly) {
+    const forceY = 22
+    const downwardCenter = rowX(0, 4, forceWidth) + forceWidth + gap / 2
+    const upwardCenter = rowX(2, 4, forceWidth) + forceWidth + gap / 2
+    forceLabels.push(
+      <g className="bench-directions" key="directions" aria-hidden="true">
+        <text x={downwardCenter} y={16}>
+          ↓ Hacia abajo
+        </text>
+        <text x={upwardCenter} y={16}>
+          ↑ Hacia arriba
+        </text>
+      </g>,
+    )
+    resultants.forEach(({ id, label, anchor, color, verticalN }, i) => {
+      const p = project(anchor)
+      const sources = contactAnchors.get(id) ?? [p]
+      const benchShare = Math.round((100 * frame.forces.benchN) / (systemWeight || 1))
+      const share = id === 'feet' ? 100 - benchShare : benchShare
+      const support = id === 'bench' || id === 'feet'
+      const split = sources.length === 2
+      const narrow = forceWidth < 100
+      const source =
+        showLoadPath && id === 'bar' ? (narrow ? 'Manos' : 'Barra sobre manos') : shortNames[id]
+      const name = source + (showLoadPath && support ? ' · ' + share + '%' : '')
+      const half = formatForce(verticalN / 2)
+      const detail = split
+        ? narrow
+          ? '½ = ' + half
+          : half + (id === 'bar' ? ' por mano' : ' por pie')
+        : ''
+      const h = showLoadPath ? 45 : 33
+      const x = rowX(i, 4, forceWidth)
+      const direction = verticalN === 0 ? 'fuerza nula' : verticalN > 0 ? 'hacia arriba' : 'hacia abajo'
+      const description = [
+        showLoadPath && id === 'bar' ? 'Carga de la barra sobre ambas manos' : label,
+        formatForce(verticalN) + ' ' + direction,
+        showLoadPath && support && share + '% del apoyo total',
+        split && half + (id === 'bar' ? ' por mano' : ' por pie'),
+        showLoadPath && id === 'bar' && '50% de la barra en cada mano',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      labels.push(
+        <g
+          key={id}
+          aria-hidden="true"
+          data-force-kind={support ? 'support' : id}
+          className="bench-contact-lines"
+          color={color}
+        >
+          <path className="mechanics-leader" d={pathOf([{ x: x + forceWidth / 2, y: forceY + h }, p])} />
+          {split && <path className="bench-split-link" d={pathOf(sources)} />}
+        </g>,
+      )
+      forceLabels.push(
+        <g
+          key={id}
+          data-label-for={id}
+          data-force-kind={support ? 'support' : id}
+          color={color}
+          transform={`translate(${x},${forceY})`}
+          aria-label={description}
+        >
+          <title>{description}</title>
+          <rect className="mechanics-card" width={forceWidth} height={h} rx={5} />
+          <path className="mechanics-card-stripe" d={`M2,7 V${h - 7}`} />
+          <text className="mechanics-label-name" x={7} y={12}>
+            {name}
+          </text>
+          <text className="mechanics-label-value" x={7} y={27}>
+            {formatForce(verticalN)}
+          </text>
+          {detail && (
+            <text className="bench-share-value" x={7} y={40}>
+              {detail}
+            </text>
+          )}
+        </g>,
+      )
+    })
+    if (axialView)
+      forceLabels.push(
+        <text key="depth" className="bench-depth-key" x={width / 2} y={showLoadPath ? 81 : 70}>
+          ⊙ Hacia vos · ⊗ Se aleja
+        </text>,
+      )
+  }
   const momentVectors =
     showMoments &&
+    !vectorsOnly &&
     joints.map((id, i) => {
       const origin = arm[id],
         anchor = project(origin),
@@ -277,12 +393,15 @@ export function BenchAnnotations({
         <g data-moment={id} key={id} color={jointInk}>
           <Arrow points={points} className="mechanics-arc" />
           <circle cx={anchor.x} cy={anchor.y} r={3.2} className="mechanics-pivot" />
-          {select && <circle cx={anchor.x} cy={anchor.y} r={12} className="mechanics-hit" onClick={select} />}
+          {select && (
+            <circle cx={anchor.x} cy={anchor.y} r={12} className="mechanics-hit" onClick={select} />
+          )}
         </g>
       )
     })
   const lever =
     showBarArm &&
+    !vectorsOnly &&
     joint !== 'all' &&
     (() => {
       const at = arm[joint],
@@ -307,11 +426,16 @@ export function BenchAnnotations({
       role="group"
       aria-labelledby={title}
     >
-      <title id={title}>Fuerzas externas y momentos internos por brazo durante el press de banca</title>
+      <title id={title}>
+        {vectorsOnly
+          ? 'Fuerzas durante la edición del press de banca'
+          : 'Fuerzas externas y momentos internos por brazo durante el press de banca'}
+      </title>
       {labels}
       {lever}
-      {forceVectors}
       {momentVectors}
+      {forceVectors}
+      {forceLabels}
     </svg>
   )
 }

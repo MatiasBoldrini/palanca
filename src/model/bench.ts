@@ -1,4 +1,6 @@
 import {
+  type Anthropometry,
+  anthropometryFromHeight,
   GRAVITY,
   LANDMARK_HEIGHT,
   LENGTH_FRACTION,
@@ -35,7 +37,10 @@ export interface BenchLeg {
   heel: BenchPoint
   toe: BenchPoint
 }
+export type BenchSegments = Pick<Anthropometry, 'shank' | 'thigh' | 'torso' | 'arm' | 'foot'>
+
 export interface BenchFrame {
+  segments: BenchSegments & { height: number }
   bar: BenchPoint
   bodyCom: BenchPoint
   benchSupport: BenchPoint
@@ -128,23 +133,23 @@ function loadArm(points: ArmPoints, bodyKg: number, barKg: number) {
   return { arm: { ...points, moments }, bodyMasses: [upper, forearm, hand] }
 }
 
-function placeLeg(side: number, hipMid: BenchPoint, height: number): BenchLeg {
+/** Keep both rigid links at their measured lengths while placing the sole flat
+ * on the floor. Prefer a nearly vertical shin within the reachable knee heights. */
+function placeLeg(side: number, hipMid: BenchPoint, dimensions: BenchFrame['segments']): BenchLeg {
+  const { height, shank, thigh, foot: footLength } = dimensions
   const hip = at(hipMid.x, hipMid.y, (side * LENGTH_FRACTION.hipWidth * height) / 2)
   const kneeZ = side * 0.115 * height
   const ankleZ = side * 0.125 * height
-  const shinDx = 0.035 * height
   const ankleY = LANDMARK_HEIGHT.ankle * height
-  const kneeY =
-    ankleY + Math.sqrt((LENGTH_FRACTION.shank * height) ** 2 - shinDx ** 2 - (ankleZ - kneeZ) ** 2)
-  const thighDx = Math.sqrt(
-    Math.max(
-      0,
-      (LENGTH_FRACTION.thigh * height) ** 2 - (hip.y - kneeY) ** 2 - (hip.z - kneeZ) ** 2,
-    ),
-  )
+  const shinReachSq = shank ** 2 - (ankleZ - kneeZ) ** 2
+  const thighReachSq = thigh ** 2 - (hip.z - kneeZ) ** 2
+  const preferredKneeY = ankleY + Math.sqrt(Math.max(0, shinReachSq - (0.035 * height) ** 2))
+  const thighReach = Math.sqrt(thighReachSq)
+  const kneeY = clamp(preferredKneeY, hip.y - thighReach, hip.y + thighReach)
+  const thighDx = Math.sqrt(Math.max(0, thighReachSq - (hip.y - kneeY) ** 2))
+  const shinDx = Math.sqrt(Math.max(0, shinReachSq - (ankleY - kneeY) ** 2))
   const knee = at(hip.x - thighDx, kneeY, kneeZ)
   const ankle = at(knee.x + shinDx, ankleY, ankleZ)
-  const footLength = LENGTH_FRACTION.foot * height
   return {
     hip,
     knee,
@@ -176,31 +181,47 @@ export function buildBenchFrame(
   heightM: number,
   massKg: number,
   gripRatio: number = BENCH_GRIP.default,
+  segments: BenchSegments = anthropometryFromHeight(heightM, massKg),
 ): BenchFrame {
+  const dimensions = {
+    height: heightM,
+    shank: segments.shank,
+    thigh: segments.thigh,
+    torso: segments.torso,
+    arm: segments.arm,
+    foot: segments.foot,
+  }
   const t = clamp(progress, 0, 1)
   const grip = clamp(gripRatio, BENCH_GRIP.min, BENCH_GRIP.max)
   const benchHeight = 0.43
   const shoulderY = benchHeight + 0.074 * heightM
   const shoulderHalf = (LENGTH_FRACTION.shoulderWidth * heightM) / 2
   const gripHalf = shoulderHalf * grip
-  const length = LENGTH_FRACTION.arm * heightM
+  const length = dimensions.arm
   const lockoutY = shoulderY + Math.sqrt(length * length - (gripHalf - shoulderHalf) ** 2)
   const bottomY = benchHeight + 0.143 * heightM
+  // A longer trunk moves the chest contact footward while lockout remains
+  // over the shoulders. Its position at the chest must be within arm reach.
+  const chestOffset = Math.min(
+    (0.1 / LENGTH_FRACTION.torso) * dimensions.torso,
+    Math.sqrt(Math.max(0, (lockoutY - shoulderY) ** 2 - (bottomY - shoulderY) ** 2)),
+  )
   const remaining = 1 - t
   const bar = at(
-    -0.1 * heightM * remaining * (0.75 + 0.25 * Math.sqrt(remaining)),
+    -chestOffset * remaining * (0.75 + 0.25 * Math.sqrt(remaining)),
     lockoutY - (lockoutY - bottomY) * remaining,
   )
   const arms = ([1, -1] as const).map((side) =>
     loadArm(placeArm(side, shoulderHalf, shoulderY, bar, gripHalf, length), massKg, loadKg),
   )
-  const hip = at(-LENGTH_FRACTION.torso * heightM, benchHeight + 0.055 * heightM)
+  const hipY = benchHeight + 0.055 * heightM
+  const hip = at(-Math.sqrt(dimensions.torso ** 2 - (shoulderY - hipY) ** 2), hipY)
   const shoulderMid = at(0, shoulderY)
   const chest = between(hip, shoulderMid, 0.69)
   chest.y += 0.012 * heightM
   const neck = at(0.045 * heightM, benchHeight + 0.064 * heightM)
   const head = at(LENGTH_FRACTION.headCom * heightM, benchHeight + 0.059 * heightM)
-  const legs: [BenchLeg, BenchLeg] = [placeLeg(1, hip, heightM), placeLeg(-1, hip, heightM)]
+  const legs: [BenchLeg, BenchLeg] = [placeLeg(1, hip, dimensions), placeLeg(-1, hip, dimensions)]
   const l5 = between(hip, shoulderMid, TRUNK_LINK_FRACTION.pelvis)
   const t12 = between(hip, shoulderMid, TRUNK_LINK_FRACTION.pelvis + TRUNK_LINK_FRACTION.lumbar)
   const masses: PointMass[] = [
@@ -225,6 +246,7 @@ export function buildBenchFrame(
     (footSupport.x - benchSupport.x)
   const benchN = -(barN + bodyN + feetN)
   return {
+    segments: dimensions,
     bar,
     bodyCom,
     benchSupport,

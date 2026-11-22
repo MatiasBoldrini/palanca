@@ -1,4 +1,4 @@
-import { ArrowUpDown, RotateCcw, Ruler } from 'lucide-react'
+import { ArrowUpDown, GitFork, RotateCcw, Ruler } from 'lucide-react'
 import { formatForce } from '../model/mechanicsOverlay'
 
 export interface JointOption<K extends string> {
@@ -7,6 +7,8 @@ export interface JointOption<K extends string> {
 }
 
 interface Props<K extends string> {
+  loadPath: boolean
+  onLoadPath: () => void
   forces: boolean
   moments: boolean
   lever: boolean
@@ -25,6 +27,15 @@ export function MechanicsControls<K extends string>(props: Props<K>) {
         <button className="force-toggle" aria-pressed={props.forces} onClick={props.onForces}>
           <ArrowUpDown size={15} aria-hidden />
           Fuerzas
+        </button>
+        <button
+          className="load-path-toggle"
+          aria-pressed={props.forces && props.loadPath}
+          onClick={props.onLoadPath}
+          title="Alternar las fuerzas por contacto y las fuerzas totales"
+        >
+          <GitFork size={15} aria-hidden />
+          Reparto de carga
         </button>
         <button className="moment-toggle" aria-pressed={props.moments} onClick={props.onMoments}>
           <RotateCcw size={15} aria-hidden />
@@ -68,6 +79,7 @@ export function ForceBalance({ forces, note }: { forces: ForceReading[]; note: s
         <ArrowUpDown size={18} aria-hidden />
         Fuerzas externas
       </h2>
+      <p className="moment-note">Balance del conjunto formado por el cuerpo y la barra.</p>
       <dl className="force-readings">
         {forces.map((f) => (
           <div key={f.id} className={'force-' + f.id}>

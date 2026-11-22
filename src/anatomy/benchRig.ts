@@ -1,12 +1,10 @@
-import { Bone, Color, Matrix4, MeshStandardMaterial, SkinnedMesh, Vector3 } from 'three'
+import { Bone, Matrix4, Vector3 } from 'three'
 import { GRAVITY } from '../model/anthropometry'
 import type { BenchFrame, BenchPoint } from '../model/bench'
 import type { createAnatomicalBody, AnatomyLayer } from './body'
 import { restLimbs, restSpine } from './rig'
 
 type Body = Awaited<ReturnType<typeof createAnatomicalBody>>
-export type BenchJoint = 'shoulder' | 'elbow' | 'wrist'
-export type BenchPeaks = Partial<Record<BenchJoint, number>>
 const vector = (p: BenchPoint) => new Vector3(p.x, p.y, p.z)
 const up = new Vector3(0, 1, 0)
 const footward = new Vector3(-1, 0, 0)
@@ -22,19 +20,12 @@ function orientedFrame(start: Vector3, end: Vector3, anterior: Vector3) {
 
 export function createBenchRig(body: Pick<Body, 'root' | 'style' | 'barbell'>) {
   const bones = new Map<string, Bone[]>()
-  const muscleSurfaces: { material: MeshStandardMaterial; joint: BenchJoint }[] = []
   body.root.traverse((node) => {
     if (node instanceof Bone) {
       node.matrixAutoUpdate = false
       const group = bones.get(node.name) ?? []
       group.push(node)
       bones.set(node.name, group)
-    }
-    if (node instanceof SkinnedMesh && node.userData.benchMuscle) {
-      muscleSurfaces.push({
-        material: node.material as MeshStandardMaterial,
-        joint: node.userData.benchMuscle === 'triceps' ? 'elbow' : 'shoulder',
-      })
     }
   })
   function apply(name: string, transform: Matrix4) {
@@ -54,15 +45,17 @@ export function createBenchRig(body: Pick<Body, 'root' | 'style' | 'barbell'>) {
     matrix.scale(new Vector3(scale, start.distanceTo(end) / ref.length, scale))
     apply(ref.name, matrix.multiply(ref.inverseRest))
   }
-  const cool = new Color('#d2b7a0')
-  const warm = new Color('#f27c45')
   let previousLayer: AnatomyLayer | undefined
-  return (frame: BenchFrame, layer: AnatomyLayer, peaks?: BenchPeaks) => {
+  return (frame: BenchFrame, layer: AnatomyLayer) => {
     const hip = vector(frame.pose.hip)
-    const shoulder = vector(frame.arms[0].shoulder).add(vector(frame.arms[1].shoulder)).multiplyScalar(0.5)
-    const scale = hip.distanceTo(shoulder) / (restSpine[5].from.y - restSpine[0].from.y)
+    const shoulder = vector(frame.arms[0].shoulder)
+      .add(vector(frame.arms[1].shoulder))
+      .multiplyScalar(0.5)
+    const scale = frame.segments.height / 1.71
     const spine = (level: number) =>
-      hip.clone().lerp(shoulder, (level - restSpine[0].from.y) / (restSpine[5].from.y - restSpine[0].from.y))
+      hip
+        .clone()
+        .lerp(shoulder, (level - restSpine[0].from.y) / (restSpine[5].from.y - restSpine[0].from.y))
     for (const ref of restSpine) {
       const end = ref.name === 'head' ? vector(frame.pose.head).lerp(shoulder, -0.4) : spine(ref.to.y)
       segment(ref, spine(ref.from.y), end, up, scale)
@@ -97,18 +90,6 @@ export function createBenchRig(body: Pick<Body, 'root' | 'style' | 'barbell'>) {
     if (previousLayer !== layer) {
       body.style(layer, null)
       previousLayer = layer
-    }
-    if (layer === 'muscles') {
-      for (const { material, joint } of muscleSurfaces) {
-        const peak = peaks?.[joint]
-        const amount = peak ? Math.min(1, frame.arms[0].moments[joint].magnitudeNm / peak) : 0
-        if (material.vertexColors) {
-          material.vertexColors = false
-          material.needsUpdate = true
-        }
-        material.color.copy(cool).lerp(warm, amount)
-        material.emissive.setRGB(0.08 * amount, 0.017 * amount, 0)
-      }
     }
     body.barbell.update(frame.bar, 0.225, Math.abs(frame.forces.barN) / GRAVITY, 'bench')
     body.root.updateMatrixWorld(true)

@@ -28,6 +28,7 @@ export type HotspotId =
   | 'shank'
   | 'thigh'
   | 'arm'
+  | 'ankle'
 
 export interface Hotspot {
   id: HotspotId
@@ -89,6 +90,7 @@ const HOTSPOT_LABEL: Record<HotspotId, string> = {
   shank: 'Tibia',
   thigh: 'Fémur',
   arm: 'Brazo',
+  ankle: 'Tobillo',
 }
 
 /**
@@ -150,6 +152,8 @@ export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
       return ['cop']
     case 'foot':
       return []
+    case 'ankle':
+      return ['dorsiflexion']
     case 'shank':
       return ['shank']
     case 'thigh':
@@ -159,8 +163,31 @@ export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
   }
 }
 
+/** The atlas also exposes load on the plates, foot length and ankle mobility. */
+export function editableHotspotsFor(exercise: ExerciseId, frame: Frame): Hotspot[] {
+  const spots = hotspotsFor(exercise, frame, true)
+  const p = frame.posture
+  function add(id: HotspotId, point: Vec2) {
+    spots.push({ id, point, label: HOTSPOT_LABEL[id] })
+  }
+  if (exercise === 'deadlift') {
+    add('bar', p.bar)
+    add('hip', p.hip)
+  }
+  add('ankle', p.ankle)
+  add('foot', { x: (p.heel.x + 3 * p.toe.x) / 4, y: p.toe.y })
+  return spots
+}
+
+export function bodyParamsFor(part: HotspotId, exercise: ExerciseId): ParamId[] {
+  if (part === 'bar') return ['load', ...paramsFor(part, exercise)]
+  if (part === 'foot') return ['foot']
+  if (part === 'hip' && exercise === 'deadlift') return ['progress']
+  return paramsFor(part, exercise)
+}
+
 /** Outer bounds, before the solver gets a say. */
-const PARAM_LIMITS: Record<ParamId, Range> = {
+export const PARAM_LIMITS: Record<ParamId, Range> = {
   progress: { min: 0, max: 1 },
   load: { min: 20, max: 400 },
   cop: { min: -0.06, max: 0.06 },

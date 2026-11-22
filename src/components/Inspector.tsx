@@ -10,7 +10,7 @@ import {
 import { PARAM_UI } from './params'
 import { Slider } from './ui'
 
-function ParamSlider({
+export function ParamSlider({
   id,
   setup,
   accent,

@@ -1,0 +1,101 @@
+.body-part-drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.body-part-leader {
+  stroke: #767c70;
+  stroke-width: 0.9;
+  stroke-dasharray: 3 2;
+  fill: none;
+}
+.body-part-leader.selected {
+  stroke: #70482d;
+  stroke-width: 1.7;
+  stroke-dasharray: none;
+}
+.body-part-hit {
+  fill: transparent;
+}
+.body-part-ring {
+  fill: #fcfaf5;
+  stroke: #696957;
+  stroke-width: 1.6;
+}
+.body-part-dot {
+  fill: #696957;
+}
+.body-part-anchor.selected .body-part-ring {
+  stroke: #88542c;
+  stroke-width: 2.2;
+}
+.body-part-anchor.selected .body-part-dot {
+  fill: #88542c;
+}
+.body-part-label,
+.body-part-anchor {
+  pointer-events: all;
+  cursor: pointer;
+}
+.body-part-card {
+  fill: #fffdf7;
+  stroke: #bdc1b3;
+  stroke-width: 1;
+}
+.body-part-text {
+  font-size: 11.5px;
+  font-weight: 550;
+  fill: #3c4036;
+}
+.body-part-label[aria-pressed='true'] .body-part-card,
+.body-part-label:focus-visible .body-part-card {
+  stroke: #875a37;
+  stroke-width: 1.7;
+  fill: #f1e9d6;
+}
+.body-part-label:hover .body-part-card {
+  fill: #eeeee4;
+}
+.anatomy-viewer.editing-body:not(.edit-forces) .load-path-drawing,
+.anatomy-viewer.editing-body:not(.edit-forces) .mechanics-overlay {
+  display: none !important;
+}
+.body-part-segment {
+  fill: none;
+  stroke: #fff1a9;
+  stroke-width: 7;
+  stroke-opacity: 0.88;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px #744f2d);
+}
+
+.edit-forces .mechanics-overlay [data-label-for],
+.edit-forces .mechanics-overlay .mechanics-leader {
+  display: none;
+}
+.body-part-dimension-ends,
+.body-part-dimension-line {
+  fill: none;
+  stroke: #3d6861;
+  stroke-linecap: round;
+}
+.body-part-dimension-ends {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.body-part-dimension-line {
+  stroke-width: 1.7;
+}
+.body-part-dimension-value {
+  font-size: 11.5px;
+  font-weight: 650;
+  fill: #2d5750;
+  stroke: #fffdf7;
+  stroke-width: 3px;
+  paint-order: stroke;
+}

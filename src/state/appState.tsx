@@ -44,7 +44,14 @@ export interface AppState {
 const initialState: AppState = {
   benchActive: false,
   bench: { progress: 1, gripRatio: 1.5, joint: 'all' },
-  mechanics: { forces: true, moments: true, lever: true, joint: 'all' },
+  mechanics: {
+    focus: 'all',
+    forces: true,
+    loadPath: true,
+    moments: true,
+    lever: true,
+    joint: 'all',
+  },
   exercise: 'deadlift',
   anthro: DEFAULT_ANTHROPOMETRY,
   task: DEFAULT_TASK,
@@ -204,6 +211,11 @@ function encode(state: AppState): string {
   const payload = {
     e: state.benchActive ? 2 : state.exercise === 'deadlift' ? 0 : 1,
     standing: state.exercise,
+    stance: {
+      deadlift: state.coordination.deadlift.stanceWidth,
+      squat: state.coordination.squat.stanceWidth,
+      style: state.coordination.deadlift.deadliftStyle,
+    },
     b: [round(state.bench.progress), round(state.bench.gripRatio), state.bench.joint],
     m: state.mechanics,
     h: round(state.anthro.height),
@@ -246,6 +258,16 @@ function decode(hash: string): Partial<AppState> | null {
       arm: p.ar,
       maxDorsiflexion: p.df,
     }
+    const savedStance = p.stance ?? {}
+    const savedWidth = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+    const stanceByExercise = {
+      deadlift: {
+        stanceWidth: savedWidth(savedStance.deadlift),
+        deadliftStyle: savedStance.style === 'sumo' ? ('sumo' as const) : ('conventional' as const),
+      },
+      squat: { stanceWidth: savedWidth(savedStance.squat) },
+    }
     const mechanics = p.m ?? {}
     const bench = Array.isArray(p.b) ? p.b : []
     return {
@@ -260,7 +282,9 @@ function decode(hash: string): Partial<AppState> | null {
         joint: ['shoulder', 'elbow', 'wrist'].includes(bench[2]) ? bench[2] : 'all',
       },
       mechanics: {
+        focus: ['bar', 'body', 'support'].includes(mechanics.focus) ? mechanics.focus : 'all',
         forces: mechanics.forces !== false,
+        loadPath: mechanics.loadPath !== false,
         moments: mechanics.moments !== false,
         lever: mechanics.lever !== false,
         joint: ['l5s1', 'hip', 'knee', 'ankle'].includes(mechanics.joint) ? mechanics.joint : 'all',
@@ -278,8 +302,10 @@ function decode(hash: string): Partial<AppState> | null {
         barPosition: p.bp,
       },
       coordination: {
-        ...initialState.coordination,
+        deadlift: { ...initialState.coordination.deadlift, ...stanceByExercise.deadlift },
+        squat: { ...initialState.coordination.squat, ...stanceByExercise.squat },
         [exercise]: {
+          ...stanceByExercise[exercise],
           kneeTravel: p.c[0],
           spineFlexion: p.c[1],
           barOffset: p.c[2],

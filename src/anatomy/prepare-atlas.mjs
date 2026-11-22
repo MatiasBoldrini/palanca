@@ -280,17 +280,9 @@ function sourceMesh(file, bone) {
       forearm: 'arm',
       upperArm: 'arm',
     }[part]
-    // Preserve named anatomical surfaces for the bench press demand overlay.
-    let benchMuscle
-    if (tissue === 'muscle') {
-      if (/pectoralis major/.test(name)) benchMuscle = 'pectoralis'
-      if (/clavicular part of .*deltoid/.test(name)) benchMuscle = 'anteriorDeltoid'
-      if (/triceps brachii/.test(name)) benchMuscle = 'triceps'
-    }
-    const key = [tissue, muscle, hotspot, ...(benchMuscle ? [benchMuscle] : [])].join('_')
+    const key = [tissue, muscle, hotspot].join('_')
     const group = sources[source].get(key) ?? {
       muscle,
-      benchMuscle,
       hotspot,
       tissue,
       positions: [],
@@ -410,7 +402,7 @@ function writeGLB(groups, filename) {
       name,
       mesh: meshes.length - 1,
       skin: 0,
-      extras: { tissue: g.tissue, muscle: g.muscle || null, hotspot: g.hotspot, benchMuscle: g.benchMuscle },
+      extras: { tissue: g.tissue, muscle: g.muscle || null, hotspot: g.hotspot },
     })
   }
   const joints = bones.map((_, i) => i)

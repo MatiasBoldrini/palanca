@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { GRAVITY, LENGTH_FRACTION } from './anthropometry'
 import { BENCH_GRIP, benchPointDistance as distance, buildBenchFrame } from './bench'
+import { benchContactForces } from './benchOverlay'
 import { repetitionPose } from './repetition'
 
 const joints = ['shoulder', 'elbow', 'wrist'] as const
@@ -109,3 +110,26 @@ describe.each([BENCH_GRIP.min, BENCH_GRIP.default, BENCH_GRIP.max])(
     })
   },
 )
+
+it('distributes the bar and foot reactions at the contacts without double-counting either resultant', () => {
+  for (const progress of [0, 0.5, 1]) {
+    for (const load of [0, 20, 100, 300]) {
+      const frame = buildBenchFrame(progress, load, 1.75, 80)
+      const forces = benchContactForces(frame)
+      expect(forces).toHaveLength(6)
+      for (const [i, side] of ['positive', 'negative'].entries()) {
+        const hand = forces.find(f => f.id === 'hand-' + side)!
+        const foot = forces.find(f => f.id === 'foot-' + side)!
+        expect(hand.verticalN).toBe(frame.forces.barN / 2)
+        expect(hand.anchor).toEqual(frame.arms[i].grip)
+        expect(foot.verticalN).toBe(frame.forces.feetN / 2)
+        expect(foot.anchor).toEqual({...frame.footSupport, z: frame.pose.legs[i].ankle.z})
+      }
+      // The vertical resultant and moments around both horizontal axes cancel.
+      expect(forces.reduce((sum, f) => sum + f.verticalN, 0)).toBeCloseTo(0, 9)
+      for (const axis of ['x', 'z'] as const) {
+        expect(forces.reduce((sum, f) => sum + f.verticalN * f.anchor[axis], 0)).toBeCloseTo(0, 9)
+      }
+    }
+  }
+})

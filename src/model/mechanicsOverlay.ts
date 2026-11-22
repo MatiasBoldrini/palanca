@@ -2,7 +2,7 @@ import { GRAVITY } from './anthropometry'
 import type { Vec2 } from './geometry'
 import { jointLateralOffset } from './jointLandmarks'
 import { EXTENSOR_SIGN, JOINT_POINT, LIMB_SHARE, type JointKey } from './kinetics'
-import type { ExerciseId, Frame, Task } from './lift'
+import type { Frame, Task } from './lift'
 import { centreOfMass } from './posture'
 
 /** Metres in the atlas: +X anterior, +Y vertical, Z transverse. */
@@ -39,7 +39,11 @@ export interface MechanicsOverlay {
   moments: OverlayMoment[]
 }
 
+export type ForceFocus = 'all' | 'bar' | 'body' | 'support'
+
 export interface MechanicsView {
+  focus: ForceFocus
+  loadPath: boolean
   forces: boolean
   moments: boolean
   joint: JointKey | 'all'
@@ -69,8 +73,6 @@ function jointAction(joint: JointKey, moment: number) {
 export function buildMechanicsOverlay(
   frame: Frame,
   task: Task,
-  exercise: ExerciseId,
-  height: number,
   nearSide: 1 | -1 = 1,
 ): MechanicsOverlay {
   const { kinetics, posture } = frame
@@ -98,7 +100,7 @@ export function buildMechanicsOverlay(
   ]
   const moments = JOINTS.map(({ id, label }) => {
     const point = JOINT_POINT[id](posture)
-    const lateral = jointLateralOffset(id, exercise, height)
+    const lateral = jointLateralOffset(id, frame.stance)
     const momentNm = kinetics.moment[id]
     const barArmM = kinetics.barMomentArm[id]
     const barMomentNm = barWeight * barArmM * LIMB_SHARE[id] * EXTENSOR_SIGN[id]

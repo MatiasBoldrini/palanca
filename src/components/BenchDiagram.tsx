@@ -1,20 +1,40 @@
 import { useId, useState } from 'react'
 import type { BenchFrame, BenchJointId, BenchPoint } from '../model/bench'
+import type { BenchPartId } from '../model/bodyEditing'
+import { benchBodyTargets } from '../model/benchBodyParts'
 import { formatForce, formatMoment } from '../model/mechanicsOverlay'
 
-import { BENCH_JOINTS, benchForces } from '../model/benchOverlay'
+import { BENCH_JOINTS, benchContactForces, benchForces } from '../model/benchOverlay'
 
 interface Props {
   frame: BenchFrame
   height: number
   joint: BenchJointId | 'all'
   forces: boolean
+  loadPath: boolean
   moments: boolean
   lever: boolean
   peak: number
+  editingBody: boolean
+  editForces: boolean
+  editPart: BenchPartId
+  onEditPart: (id: BenchPartId) => void
 }
 
-export function BenchDiagram({ frame: f, height, joint, forces, moments, lever, peak }: Props) {
+export function BenchDiagram({
+  frame: f,
+  height,
+  joint,
+  forces,
+  loadPath,
+  moments,
+  lever,
+  peak,
+  editingBody,
+  editForces,
+  editPart,
+  onEditPart,
+}: Props) {
   const uid = useId()
   const [front, setFront] = useState(false)
   const scale = 295 / height
@@ -24,11 +44,32 @@ export function BenchDiagram({ frame: f, height, joint, forces, moments, lever, 
   const proj = (points: BenchPoint[]) => points.map(xy).join(' ')
   const benchY = 260 - f.benchHeight * scale
   const arm = f.arms[0]
+  const arrows = loadPath ? benchContactForces(f) : benchForces(f)
+  const lanes: { x: number; top: number; bottom: number }[] = []
+  // In profile, left and right contacts project to the same point. Shift the shaft,
+  // retaining a short connector to its actual contact.
+  const projected = arrows.map((force) => {
+    const originX = x(force.anchor)
+    const originY = y(force.anchor)
+    const endY = originY - (80 * force.verticalN) / Math.max(1, -f.forces.barN - f.forces.bodyN)
+    const top = Math.min(originY, endY)
+    const bottom = Math.max(originY, endY)
+    const offset =
+      [0, -11, 11, -22, 22, -33, 33].find((dx) =>
+        lanes.every(
+          (lane) =>
+            Math.abs(lane.x - originX - dx) > 9 || top - 3 > lane.bottom || bottom + 3 < lane.top,
+        ),
+      ) ?? 0
+    const shaftX = originX + offset
+    lanes.push({ x: shaftX, top, bottom })
+    return { force, originX, originY, shaftX, endY }
+  })
   return (
     <div className="bench-diagram">
       <svg
         viewBox="45 12 425 268"
-        role="img"
+        role={editingBody ? 'group' : 'img'}
         aria-label={'Diagrama de banca ' + (front ? 'desde los pies' : 'de perfil')}
       >
         <defs>
@@ -121,30 +162,74 @@ export function BenchDiagram({ frame: f, height, joint, forces, moments, lever, 
         ) : (
           <circle cx={x(f.bar)} cy={y(f.bar)} r="15" fill="#4c5553" opacity=".65" />
         )}
-        {forces &&
-          benchForces(f).map((force) => {
-            const end =
-              y(force.anchor) -
-              (76 * force.verticalN) / Math.max(1, -f.forces.barN - f.forces.bodyN)
+        {(editingBody ? editForces : forces) &&
+          projected.map(({ force, originX, originY, shaftX, endY }) => {
+            const head = Math.min(7.5, Math.abs(originY - endY) * 0.48)
+            const baseY = endY + Math.sign(originY - endY) * head
             return (
-              <g key={force.id}>
+              <g
+                key={force.id}
+                data-force={force.id}
+                color={force.color}
+                data-force-kind={
+                  force.id === 'body'
+                    ? 'body'
+                    : force.id === 'bar' || force.id.startsWith('hand-')
+                      ? 'bar'
+                      : 'support'
+                }
+              >
                 <title>
-                  {force.label} · {formatForce(force.verticalN)}
+                  {force.label} · {formatForce(force.verticalN)}{' '}
+                  {force.verticalN < 0 ? 'hacia abajo' : 'hacia arriba'}
                 </title>
-                <circle cx={x(force.anchor)} cy={y(force.anchor)} r="2.8" fill={force.color} />
+                {originX !== shaftX && (
+                  <line
+                    x1={originX}
+                    x2={shaftX}
+                    y1={originY}
+                    y2={originY}
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeDasharray="2 1.5"
+                  />
+                )}
                 <line
-                  x1={x(force.anchor)}
-                  x2={x(force.anchor)}
-                  y1={y(force.anchor)}
-                  y2={end}
-                  stroke={force.color}
-                  strokeWidth="3.5"
-                  markerEnd={'url(#' + uid + ')'}
+                  x1={shaftX}
+                  x2={shaftX}
+                  y1={originY}
+                  y2={baseY}
+                  stroke="#fffdf5"
+                  strokeWidth="5.5"
+                />
+                <line
+                  x1={shaftX}
+                  x2={shaftX}
+                  y1={originY}
+                  y2={baseY}
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <polygon
+                  points={`${shaftX},${endY} ${shaftX - head * 0.65},${baseY} ${shaftX + head * 0.65},${baseY}`}
+                  fill="currentColor"
+                  stroke="#fffdf5"
+                  strokeWidth="1.7"
+                  paintOrder="stroke"
+                />
+                <circle
+                  cx={originX}
+                  cy={originY}
+                  r="2.8"
+                  fill="#fffdf5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
                 />
               </g>
             )
           })}
-        {moments &&
+        {!editingBody &&
+          moments &&
           BENCH_JOINTS.filter((j) => joint === 'all' || j.id === joint).map((j) => {
             const p = arm[j.id],
               m = arm.moments[j.id],
@@ -192,12 +277,36 @@ export function BenchDiagram({ frame: f, height, joint, forces, moments, lever, 
               </g>
             )
           })}
-        {lever && joint !== 'all' && (
+        {!editingBody && lever && joint !== 'all' && (
           <g stroke="#696177" strokeDasharray="3 2">
             <line x1={x(arm[joint])} y1={y(arm[joint])} x2={x(arm.grip)} y2={y(arm[joint])} />
             <line x1={x(arm.grip)} x2={x(arm.grip)} y1={y(arm.grip)} y2={y(arm[joint])} />
           </g>
         )}
+        {editingBody &&
+          benchBodyTargets(f).map((target) => (
+            <g
+              className="diagram-edit-target"
+              key={target.id}
+              role="button"
+              aria-label={'Ajustar ' + target.label}
+              aria-pressed={editPart === target.id}
+              transform={'translate(' + xy(target.point) + ')'}
+              tabIndex={0}
+              onClick={() => onEditPart(target.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onEditPart(target.id)
+                }
+              }}
+            >
+              <title>{target.label}</title>
+              <circle r="9" fill="transparent" />
+              <circle className="edit-pin" r="4.5" />
+              <path d="M-2 0H2M0 -2V2" fill="none" stroke="#fff" strokeWidth="1" />
+            </g>
+          ))}
       </svg>
       <label className="diagram-plane">
         Vista{' '}

@@ -4,7 +4,12 @@ import { usePlayback } from '../hooks/useAnimationEngine'
 import { BENCH_GRIP, buildBenchFrame, type BenchJointId } from '../model/bench'
 import { formatBarArm, formatMoment } from '../model/mechanicsOverlay'
 import { useApp, useShareLink } from '../state/appState'
+import { ForceReadingGuide } from './ForceReadingGuide'
 import { BENCH_JOINTS, benchForces } from '../model/benchOverlay'
+import { BodyEditor, BodyEditToggle } from './BodyEditor'
+import { BENCH_PARTS, type BenchPartId } from '../model/bodyEditing'
+import { PARAM_LIMITS } from '../model/interact'
+import { PARAM_UI } from './params'
 import { BenchDiagram } from './BenchDiagram'
 import { ExerciseHeading, LabFooter, LabHeader } from './LabHeader'
 import { LiftTransport } from './LiftTransport'
@@ -33,10 +38,14 @@ export function BenchLab() {
   const [unavailable, setUnavailable] = useState(false)
   const [settings, setSettings] = useState(false)
   const [shared, setShared] = useState(false)
+  const [editingBody, setEditingBody] = useState(false)
+  const [editForces, setEditForces] = useState(false)
+  const [editPart, setEditPart] = useState<BenchPartId>('arm')
   const [slow, setSlow] = useState(false)
   const frameAt = useCallback(
-    (t: number) => buildBenchFrame(t, task.load, anthro.height, anthro.mass, bench.gripRatio),
-    [task.load, anthro.height, anthro.mass, bench.gripRatio],
+    (t: number) =>
+      buildBenchFrame(t, task.load, anthro.height, anthro.mass, bench.gripRatio, anthro),
+    [task.load, anthro, bench.gripRatio],
   )
   const frame = useMemo(() => frameAt(bench.progress), [frameAt, bench.progress])
   const series = useMemo(() => Array.from({ length: 65 }, (_, i) => frameAt(i / 64)), [frameAt])
@@ -74,8 +83,9 @@ export function BenchLab() {
   const armLength = Math.hypot(arm[observed].x - arm.grip.x, arm[observed].z - arm.grip.z)
   const selectJoint = useCallback(
     (value: BenchJointId | 'all') => {
+      setEditingBody(false)
       dispatch({ type: 'setBench', patch: { joint: value } })
-      dispatch({ type: 'setMechanics', patch: { moments: true } })
+      dispatch({ type: 'setMechanics', patch: { moments: true, focus: 'all' } })
     },
     [dispatch],
   )
@@ -98,6 +108,42 @@ export function BenchLab() {
     'bench',
   )
 
+  const gripSlider = (
+    <Slider
+      label="Ancho de agarre"
+      value={bench.gripRatio}
+      min={BENCH_GRIP.min}
+      max={BENCH_GRIP.max}
+      step={0.05}
+      format={(v) => formatBarArm(2 * arm.grip.z) + ' · ' + v.toLocaleString('es-AR') + '× hombros'}
+      onChange={(v) => dispatch({ type: 'setBench', patch: { gripRatio: v } })}
+      hint="La distancia entre las manos se expresa en múltiplos del ancho de hombros."
+    />
+  )
+  const partSettings =
+    editPart === 'grip' ? (
+      gripSlider
+    ) : editPart === 'bar' ? (
+      <Slider
+        label="Carga de la barra"
+        value={task.load}
+        min={PARAM_LIMITS.load.min}
+        max={PARAM_LIMITS.load.max}
+        step={PARAM_UI.load.step}
+        format={PARAM_UI.load.format}
+        onChange={(load) => dispatch({ type: 'setTask', patch: { load } })}
+      />
+    ) : (
+      <Slider
+        label={PARAM_UI[editPart].label}
+        value={Number((anthro[editPart] * 100).toFixed(2))}
+        min={Math.round(PARAM_LIMITS[editPart].min * 100)}
+        max={Math.round(PARAM_LIMITS[editPart].max * 100)}
+        step={PARAM_UI[editPart].step}
+        format={PARAM_UI[editPart].format}
+        onChange={(size) => dispatch({ type: 'setAnthro', patch: { [editPart]: size / 100 } })}
+      />
+    )
   return (
     <div className="atlas-app">
       <LabHeader
@@ -110,7 +156,7 @@ export function BenchLab() {
         <ExerciseHeading
           name="Press de banca"
           load={task.load}
-          description="Seguí la barra desde el pecho y compará cómo cambia su palanca sobre el hombro y el codo."
+          description="Observá cuánto sostienen el banco y los pies a medida que la barra sube desde el pecho."
         />
         <div
           className="atlas-layout"
@@ -119,7 +165,11 @@ export function BenchLab() {
           aria-labelledby="exercise-bench"
         >
           <div className="lift-column">
-            <section className="atlas-card viewer-card" aria-label="Simulador del levantamiento">
+            <section
+              className="atlas-card viewer-card"
+              aria-label="Simulador del levantamiento"
+              data-force-focus={mechanics.forces && !editingBody ? mechanics.focus : 'all'}
+            >
               <div className="view-toolbar">
                 <div className="view-modes" role="group" aria-label="Representación">
                   <button
@@ -143,41 +193,74 @@ export function BenchLab() {
                     Diagrama 2D
                   </button>
                 </div>
-                {mode === 'anatomy' && (
-                  <label className="layer-picker">
-                    {layer === 'muscles' ? (
-                      <Layers3 size={15} aria-hidden />
-                    ) : (
-                      <Bone size={15} aria-hidden />
-                    )}
-                    <select
-                      aria-label="Capa anatómica"
-                      value={layer}
-                      onChange={(e) =>
-                        setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
-                      }
-                    >
-                      <option value="muscles">Músculos</option>
-                      <option value="skeleton">Esqueleto</option>
-                    </select>
-                  </label>
-                )}
+                <div className="viewer-actions">
+                  <BodyEditToggle
+                    active={editingBody}
+                    onClick={() => {
+                      stop()
+                      setEditingBody(!editingBody)
+                    }}
+                  />
+                  {mode === 'anatomy' && (
+                    <label className="layer-picker">
+                      {layer === 'muscles' ? (
+                        <Layers3 size={15} aria-hidden />
+                      ) : (
+                        <Bone size={15} aria-hidden />
+                      )}
+                      <select
+                        aria-label="Capa anatómica"
+                        value={layer}
+                        onChange={(e) =>
+                          setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
+                        }
+                      >
+                        <option value="muscles">Músculos</option>
+                        <option value="skeleton">Esqueleto</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
               </div>
-              <MechanicsControls<BenchJointId>
-                {...mechanics}
-                options={BENCH_JOINTS}
-                joint={selected}
-                onJoint={selectJoint}
-                onForces={() =>
-                  dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
-                }
-                onMoments={() =>
-                  dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
-                }
-                onLever={() =>
-                  dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
-                }
-              />
+              {editingBody ? (
+                <BodyEditor
+                  editForces={editForces}
+                  onEditForces={setEditForces}
+                  selected={editPart}
+                  onSelect={setEditPart}
+                  options={(Object.keys(BENCH_PARTS) as BenchPartId[]).map((id) => ({
+                    id,
+                    label: BENCH_PARTS[id],
+                  }))}
+                >
+                  {partSettings}
+                </BodyEditor>
+              ) : (
+                <MechanicsControls<BenchJointId>
+                  {...mechanics}
+                  options={BENCH_JOINTS}
+                  joint={selected}
+                  onJoint={selectJoint}
+                  onLoadPath={() =>
+                    dispatch({
+                      type: 'setMechanics',
+                      patch: {
+                        forces: true,
+                        loadPath: !mechanics.forces || !mechanics.loadPath,
+                      },
+                    })
+                  }
+                  onForces={() =>
+                    dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                  }
+                  onMoments={() =>
+                    dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                  }
+                  onLever={() =>
+                    dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                  }
+                />
+              )}
               {unavailable && (
                 <p className="fallback-note" role="status">
                   Se abrió el diagrama del mismo movimiento porque el visor 3D no pudo iniciarse.
@@ -197,7 +280,12 @@ export function BenchLab() {
                         frame={frame}
                         layer={layer}
                         joint={selected}
+                        editingBody={editingBody}
+                        editForces={editForces}
+                        editPart={editPart}
+                        onEditPart={setEditPart}
                         showForces={mechanics.forces}
+                        showLoadPath={mechanics.loadPath}
                         showMoments={mechanics.moments}
                         showBarArm={mechanics.lever}
                         peaks={peaks}
@@ -211,11 +299,24 @@ export function BenchLab() {
                     frame={frame}
                     height={anthro.height}
                     {...mechanics}
+                    editingBody={editingBody}
+                    editForces={editForces}
+                    editPart={editPart}
+                    onEditPart={setEditPart}
                     joint={selected}
                     peak={peak}
                   />
                 )}
               </div>
+              {!editingBody && mechanics.forces && (
+                <ForceReadingGuide
+                  focus={mechanics.focus}
+                  onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
+                  loadPath={mechanics.loadPath}
+                  benchReaction={frame.forces.benchN}
+                  feetReaction={frame.forces.feetN}
+                />
+              )}
               <LiftTransport
                 marker="Barra"
                 height={frame.bar.y}
@@ -226,7 +327,10 @@ export function BenchLab() {
                 phase={phase}
                 slow={slow}
                 onSpeed={() => setSlow(!slow)}
-                onPlay={() => dispatch({ type: 'setPlaying', playing: !state.playing })}
+                onPlay={() => {
+                  setEditingBody(false)
+                  dispatch({ type: 'setPlaying', playing: !state.playing })
+                }}
                 onScrub={(value) => {
                   stop()
                   progress(value)
@@ -239,20 +343,7 @@ export function BenchLab() {
                 <b>{formatMoment((armLength * Math.abs(frame.forces.barN)) / 2)}</b> por brazo.
               </p>
             </section>
-            <section className="atlas-card bench-grip">
-              <Slider
-                label="Ancho de agarre"
-                value={bench.gripRatio}
-                min={BENCH_GRIP.min}
-                max={BENCH_GRIP.max}
-                step={0.05}
-                format={(v) =>
-                  formatBarArm(2 * arm.grip.z) + ' · ' + v.toLocaleString('es-AR') + '× hombros'
-                }
-                onChange={(v) => dispatch({ type: 'setBench', patch: { gripRatio: v } })}
-                hint="La distancia entre las manos se expresa en múltiplos del ancho de hombros."
-              />
-            </section>
+            {!editingBody && <section className="atlas-card bench-grip">{gripSlider}</section>}
           </div>
           <aside className="atlas-rail" aria-label="Guía del movimiento">
             <section className="atlas-card moments-card">
@@ -324,9 +415,9 @@ export function BenchLab() {
                 para ver la distancia lateral entre mano y hombro.
               </p>
               <p className="moment-note">
-                El color del pectoral mayor y del deltoides anterior sigue la demanda del hombro. En
-                el tríceps sigue la del codo. Cada escala toma como referencia el máximo de esa
-                articulación en la repetición.
+                El pectoral mayor actúa sobre el hombro y el tríceps extiende el codo. Para comparar
+                sus articulaciones, fijate cuánto se aleja la vertical de la mano de cada una al
+                bajar.
               </p>
             </section>
           </aside>
@@ -354,7 +445,7 @@ export function BenchLab() {
             onChange={(mass) => dispatch({ type: 'setAnthro', patch: { mass } })}
           />
           <p className="caption">
-            La geometría de banca se escala a la estatura del modelo (
+            Las medidas se comparten entre ejercicios. Estatura del modelo (
             {Math.round(anthro.height * 100)} cm).
           </p>
         </section>

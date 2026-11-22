@@ -1,17 +1,21 @@
 import type { JointKey } from './kinetics'
-import type { ExerciseId } from './lift'
+import type { Stance } from './stance'
 
-/** Distance from the sagittal midline to one joint of Palanca's posed anatomical atlas. */
-export function jointLateralOffset(joint: JointKey, exercise: ExerciseId, height: number): number {
-  const scale = height / 1.71
+/** Transverse coordinate of a joint centre on the +Z side of the posed figure. */
+export function jointLateralOffset(joint: JointKey, stance: Stance): number {
   switch (joint) {
     case 'ankle':
-      return scale * (exercise === 'squat' ? 0.151 : 0.115)
+      return stance.ankleHalf
     case 'knee':
-      return scale * (exercise === 'squat' ? 0.147 : 0.109)
+      return stance.kneeHalf
     case 'hip':
-      return scale * 0.08
+      return stance.hipHalf
     case 'l5s1':
       return 0
   }
+}
+
+/** Transverse coordinate on the +Z foot's longitudinal axis at a given sagittal X. */
+export function lateralAlongFoot(stance: Stance, ankleX: number, x: number): number {
+  return stance.ankleHalf + (x - ankleX) * Math.tan(stance.toeOutRad)
 }

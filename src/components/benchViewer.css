@@ -22,3 +22,46 @@
     font-size: 12px;
   }
 }
+.bench-directions text,
+.bench-depth-key {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #323f3c;
+  text-anchor: middle;
+  paint-order: stroke fill;
+  stroke: #faf8f1;
+  stroke-width: 3px;
+}
+.bench-share-value {
+  font-size: 10.5px;
+  font-weight: 560;
+  fill: currentColor;
+  font-variant-numeric: tabular-nums;
+}
+.bench-contact-lines .mechanics-leader {
+  stroke: currentColor;
+}
+.bench-split-link {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 3;
+}
+.bench-depth-ring {
+  fill: #fffdf7;
+  stroke: currentColor;
+  stroke-width: 2.8;
+}
+.bench-depth-cue path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.bench-depth-key {
+  font-size: 10.5px;
+}
+
+.bench-viewer .body-part-drawing {
+  z-index: 2;
+}

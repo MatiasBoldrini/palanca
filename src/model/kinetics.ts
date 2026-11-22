@@ -140,11 +140,9 @@ export function computeKinetics(
     Math.abs(moment.hip) > 1e-6 ? Math.abs(moment.knee) / Math.abs(moment.hip) : 0
 
   /*
-   * A hanging bar can only push the hand upwards: whatever horizontal offset
-   * there is between the shoulder and the bar has to be held by the shoulder
-   * itself. So the arm hanging vertical is not an accident of technique, it is
-   * the only free way to hold a load, and this is the price of departing from
-   * it. Split per shoulder, like the other paired joints.
+   * The hanging bar pulls down on each hand. The shoulder balances the moment
+   * of that force plus the weight of the arm about the shoulder joint.
+   * Split per shoulder, like the other paired joints.
    */
   const arms = byKey.get('arms')
   const shoulderMomentArm = armsCarryLoad ? posture.shoulder.x - posture.bar.x : 0

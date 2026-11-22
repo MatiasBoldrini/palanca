@@ -2,13 +2,19 @@ import { ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ACESFilmicToneMapping, SRGBColorSpace, WebGLRenderer } from 'three'
 import { createAnatomicalBody, type AnatomyLayer } from '../anatomy/body'
-import { BENCH_CAMERAS, createBenchStudio, type BenchView } from '../anatomy/benchStudio'
+import {
+  BENCH_CAMERAS,
+  createBenchStudio,
+  type BenchView,
+  type BenchEditorProps,
+} from '../anatomy/benchStudio'
 import { BenchAnnotations, type BenchMechanicsProps, type BenchProjection } from './BenchAnnotations'
 import './anatomyViewer.css'
 import '../anatomy/mechanicsDrawing.css'
 import './benchViewer.css'
 
-interface Props extends BenchMechanicsProps {
+interface Props extends BenchMechanicsProps, BenchEditorProps {
+  editForces?: boolean
   layer: AnatomyLayer
   onUnavailable: () => void
 }
@@ -24,7 +30,12 @@ export function BenchViewer(props: Props) {
   useLayoutEffect(() => {
     const previous = latest.current
     latest.current = props
-    if (previous.frame.pose.hip.x !== props.frame.pose.hip.x) studio.current?.refit()
+    const before = previous.frame.segments
+    const after = props.frame.segments
+    const resized = (Object.keys(after) as (keyof typeof after)[]).some(
+      (key) => before[key] !== after[key],
+    )
+    if (resized) studio.current?.refit()
     else studio.current?.draw()
   }, [props])
   useEffect(() => {
@@ -93,7 +104,14 @@ export function BenchViewer(props: Props) {
     <div className="anatomy-viewer bench-viewer">
       <div className="anatomy-surface" ref={host} />
       <div className="bench-label-surface">
-        {ready && projection && <BenchAnnotations {...props} projection={projection} />}
+        {ready && projection && (!props.editingBody || props.editForces) && (
+          <BenchAnnotations
+            {...props}
+            projection={projection}
+            vectorsOnly={props.editingBody}
+            showForces={props.editingBody ? true : props.showForces}
+          />
+        )}
       </div>
       {!ready && (
         <p className="anatomy-loading" role="status">

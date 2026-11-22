@@ -10,6 +10,9 @@ import {
   Mesh,
   MeshStandardMaterial,
   OrthographicCamera,
+  Raycaster,
+  Vector2,
+  type Object3D,
   Scene,
   Vector3,
   type WebGLRenderer,
@@ -17,6 +20,9 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { createAnatomicalBody, type AnatomyLayer } from './body'
+import { createBodyPartDrawing } from './bodyPartDrawing'
+import { benchBodyTargets } from '../model/benchBodyParts'
+import type { BenchPartId } from '../model/bodyEditing'
 import { createBenchRig } from './benchRig'
 import type { BenchMechanicsProps, BenchProjection } from '../components/BenchAnnotations'
 
@@ -27,7 +33,12 @@ export const BENCH_CAMERAS = {
   overhead: { label: 'Superior', yaw: -8, elevation: 68 },
 }
 export type BenchView = keyof typeof BENCH_CAMERAS
-type Props = BenchMechanicsProps & { layer: AnatomyLayer }
+export interface BenchEditorProps {
+  editingBody?: boolean
+  editPart?: BenchPartId | null
+  onEditPart?: (id: BenchPartId) => void
+}
+type Props = BenchMechanicsProps & BenchEditorProps & { layer: AnatomyLayer }
 type Body = Awaited<ReturnType<typeof createAnatomicalBody>>
 
 function createFurniture() {
@@ -104,12 +115,13 @@ export function createBenchStudio(
   let view: BenchView | 'free' = 'oblique'
   let lastFrame: Props['frame'] | undefined
   let lastLayer: AnatomyLayer | undefined
-  let lastPeaks: Props['peaks']
   let closed = false,
     fitting = false,
     width = 0,
     height = 0
   const worldUp = new Vector3(0, 1, 0)
+  const ray = new Raycaster()
+  const editDrawing = createBodyPartDrawing<BenchPartId>(host, (id) => data().onEditPart?.(id))
   function fit() {
     const frame = data().frame
     if (!width || !height) return
@@ -121,8 +133,7 @@ export function createBenchStudio(
       points.push(new Vector3(x, y, z))
     }
     const arm = frame.arms[0]
-    const v = (p: typeof arm.shoulder) => new Vector3(p.x, p.y, p.z)
-    const armLength = v(arm.shoulder).distanceTo(v(arm.elbow)) + v(arm.elbow).distanceTo(v(arm.grip))
+    const armLength = frame.segments.arm
     for (const side of [-1, 1]) {
       for (const x of [frame.pose.legs[0].toe.x, frame.pose.head.x * 1.55]) {
         for (const y of [0, frame.pose.head.y + 0.12]) point(x, y, side * 0.26)
@@ -161,14 +172,19 @@ export function createBenchStudio(
   function draw() {
     if (closed || !width || !height) return
     const next = data()
-    if (next.frame !== lastFrame || next.layer !== lastLayer || next.peaks !== lastPeaks) {
-      pose?.(next.frame, next.layer, next.peaks)
+    if (next.frame !== lastFrame || next.layer !== lastLayer) {
+      pose?.(next.frame, next.layer)
       furniture.bench.position.y = next.frame.benchHeight
       lastFrame = next.frame
       lastLayer = next.layer
-      lastPeaks = next.peaks
     }
     renderer.render(scene, camera)
+    if (body && next.editingBody) {
+      const side = camera.getWorldDirection(new Vector3()).z <= 0 ? 0 : 1
+      editDrawing.draw(camera, width, height, benchBodyTargets(next.frame, side), next.editPart ?? null)
+    } else {
+      editDrawing.hide()
+    }
   }
   function syncCamera() {
     if (fitting || closed) return
@@ -227,6 +243,71 @@ export function createBenchStudio(
     } else return
     e.preventDefault()
   }
+  // OrbitControls retains pointer capture during drag. Only an unbroken
+  // primary tap can edit the rendered mesh.
+  let tap: { id: number; x: number; y: number } | null = null
+  const canvas = renderer.domElement
+  function down(e: PointerEvent) {
+    tap =
+      e.isPrimary && e.button === 0 && data().editingBody
+        ? { id: e.pointerId, x: e.clientX, y: e.clientY }
+        : null
+  }
+  function move(e: PointerEvent) {
+    if (tap && Math.hypot(tap.x - e.clientX, tap.y - e.clientY) > 5) tap = null
+  }
+  function cancelTap() {
+    tap = null
+  }
+  function pick(e: PointerEvent) {
+    move(e)
+    if (tap?.id !== e.pointerId || !body || !data().editingBody) return
+    tap = null
+    const bounds = canvas.getBoundingClientRect()
+    ray.setFromCamera(
+      new Vector2(
+        ((e.clientX - bounds.left) * 2) / bounds.width - 1,
+        1 - ((e.clientY - bounds.top) * 2) / bounds.height,
+      ),
+      camera,
+    )
+    const frame = data().frame
+    const handReach = frame.segments.arm * 0.1
+    const regions: Record<string, BenchPartId> = {
+      foot: 'foot',
+      shank: 'shank',
+      knee: 'thigh',
+      thigh: 'thigh',
+      hip: 'torso',
+      spine: 'torso',
+      arm: 'arm',
+    }
+    for (const hit of ray.intersectObjects([body.root, furniture.bench], true)) {
+      let visible = true,
+        barbell = false
+      for (let node: Object3D | null = hit.object; node; node = node.parent) {
+        visible &&= node.visible
+        barbell ||= node === body.barbell.root
+      }
+      if (!visible) continue
+      const zone = regions[hit.object.userData.hotspot]
+      if (barbell || zone === 'arm') {
+        const atHand = frame.arms.some(
+          (arm) =>
+            hit.point.distanceToSquared(new Vector3(arm.grip.x, arm.grip.y, arm.grip.z)) <
+            handReach * handReach,
+        )
+        data().onEditPart?.(atHand ? 'grip' : barbell ? 'bar' : 'arm')
+      } else if (zone) {
+        data().onEditPart?.(zone)
+      }
+      break
+    }
+  }
+  canvas.addEventListener('pointerdown', down)
+  canvas.addEventListener('pointermove', move)
+  canvas.addEventListener('pointerup', pick)
+  canvas.addEventListener('pointercancel', cancelTap)
   setView('oblique')
   const measure = () => {
     width = host.clientWidth
@@ -258,6 +339,11 @@ export function createBenchStudio(
       resize.disconnect()
       controls.removeEventListener('change', change)
       controls.dispose()
+      editDrawing.dispose()
+      canvas.removeEventListener('pointerdown', down)
+      canvas.removeEventListener('pointermove', move)
+      canvas.removeEventListener('pointerup', pick)
+      canvas.removeEventListener('pointercancel', cancelTap)
       renderer.domElement.removeEventListener('keydown', keyboard)
       body?.dispose()
       furniture.dispose()

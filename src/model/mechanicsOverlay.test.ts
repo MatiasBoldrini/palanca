@@ -20,8 +20,8 @@ describe.each(['deadlift', 'squat'] as const)('%s mechanical annotations', (exer
         ['shin' + suffix, new Vector3(0.001, 0.072, side * 0.07)],
       ] as const
       const bones = rest.map(([name]) => Object.assign(new Bone(), { name }))
-      createRig(bones)(frame.posture, body, exercise)
-      const { moments } = buildMechanicsOverlay(frame, task, exercise, body.height, side)
+      createRig(bones)(frame, body, exercise)
+      const { moments } = buildMechanicsOverlay(frame, task, side)
       for (const [i, [, landmark]] of rest.entries()) {
         const actual = landmark.applyMatrix4(bones[i].matrix)
         const { anchor } = moments[i]
@@ -35,7 +35,7 @@ describe.each(['deadlift', 'squat'] as const)('%s mechanical annotations', (exer
       for (const progress of [0, 0.4, 1]) {
         const task = { ...DEFAULT_TASK, progress, load, balance: 'bar' as const, barPosition: 0.06 }
         const frame = solveFrame(exercise, body, task, DEFAULT_COORDINATION[exercise])
-        const { forces } = buildMechanicsOverlay(frame, task, exercise, body.height)
+        const { forces } = buildMechanicsOverlay(frame, task)
         const [bar, weight, support] = forces
         expect(forces.map((f) => f.id)).toEqual(['bar', 'body', 'ground'])
         expect(bar.anchor).toEqual({ ...frame.posture.bar, z: 0 })
@@ -58,8 +58,8 @@ describe.each(['deadlift', 'squat'] as const)('%s mechanical annotations', (exer
       const unloaded = computeKinetics(frame.posture, frame.massPoints, 0, body.mass, {
         armsCarryLoad: exercise === 'deadlift',
       })
-      const near = buildMechanicsOverlay(frame, task, exercise, body.height, 1).moments
-      const far = buildMechanicsOverlay(frame, task, exercise, body.height, -1).moments
+      const near = buildMechanicsOverlay(frame, task, 1).moments
+      const far = buildMechanicsOverlay(frame, task, -1).moments
       expect(near.map((m) => m.id)).toEqual(['l5s1', 'hip', 'knee', 'ankle'])
       for (const [i, m] of near.entries()) {
         const landmark = frame.posture[m.id === 'l5s1' ? 'lumbosacral' : m.id]
@@ -85,7 +85,7 @@ describe.each(['deadlift', 'squat'] as const)('%s mechanical annotations', (exer
 it('distinguishes flexion, extension and effectively zero demand', () => {
   const task = { ...DEFAULT_TASK, balance: 'bar' as const, barPosition: 0.08 }
   const frame = solveFrame('deadlift', body, task, DEFAULT_COORDINATION.deadlift)
-  const makeOverlay = () => buildMechanicsOverlay(frame, task, 'deadlift', body.height)
+  const makeOverlay = () => buildMechanicsOverlay(frame, task)
   const knee = makeOverlay().moments.find((m) => m.id === 'knee')!
   expect(knee.barMomentNm).toBeLessThan(0)
   expect(knee.barMomentNm + knee.bodyMomentNm).toBeCloseTo(knee.momentNm)

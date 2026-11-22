@@ -1,0 +1,70 @@
+.load-path-drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.anatomy-viewer.with-load-path {
+  --contact-summary-height: 48px;
+}
+.with-load-path .anatomy-surface {
+  top: var(--contact-summary-height);
+}
+.contact-summary {
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--contact-summary-height);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: #f7f6f1;
+  box-shadow: inset 0 -1px #e6e2d8;
+  pointer-events: none;
+}
+.contact-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px clamp(6px, 1.4vw, 20px);
+  color: #285b98;
+}
+.contact-summary > div + div {
+  color: #087568;
+}
+.contact-summary > div > svg {
+  flex: none;
+}
+.contact-summary dl {
+  margin: 0;
+}
+.contact-summary dt {
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 550;
+  color: #49483f;
+}
+.contact-summary dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.contact-summary dd small {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+@media (max-width: 440px) {
+  .contact-summary > div {
+    gap: 4px;
+  }
+  .contact-summary > div > svg {
+    width: 15px;
+  }
+  .contact-summary dt {
+    font-size: 10.5px;
+  }
+}

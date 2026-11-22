@@ -15,10 +15,13 @@ import {
   TaskPanel,
   ViewPanel,
 } from './components/ControlPanel'
-import { Inspector } from './components/Inspector'
+import { StanceControls, StanceComparison } from './components/StanceStudy'
+import { BodyEditToggle, BodyEditor } from './components/BodyEditor'
+import { Inspector, ParamSlider } from './components/Inspector'
 import { MetricsTable, buildRows } from './components/Metrics'
 import { LabHeader, ExerciseHeading, LabFooter } from './components/LabHeader'
 import { BenchLab } from './components/BenchLab'
+import { ForceReadingGuide } from './components/ForceReadingGuide'
 import { ForceBalance, MechanicsControls } from './components/MechanicsControls'
 import { buildMechanicsOverlay, formatBarArm, formatMoment } from './model/mechanicsOverlay'
 import type { JointKey } from './model/kinetics'
@@ -32,6 +35,8 @@ import {
   type Setup,
   feasibleRange,
   hotspotsFor,
+  editableHotspotsFor,
+  bodyParamsFor,
   paramValue,
   paramsFor,
   patchFor,
@@ -57,9 +62,13 @@ function StandingLab() {
   const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
   const [layer, setLayer] = useState<'muscles' | 'skeleton'>('muscles')
   const [muscle, setMuscle] = useState<MuscleId | null>(null)
+  const [editingBody, setEditingBody] = useState(false)
+  const [editForces, setEditForces] = useState(false)
+  const [editPart, setEditPart] = useState<HotspotId>('thigh')
   const [slow, setSlow] = useState(false)
   const [unavailable, setUnavailable] = useState(false)
   const useDiagramFallback = useCallback(() => {
+    setEditingBody(false)
     setUnavailable(true)
     setMode('diagram')
   }, [])
@@ -141,8 +150,10 @@ function StandingLab() {
       spineFlexion: anim.spineFlexion,
       armLean: anim.armLean,
       barOffset: anim.barOffset,
+      stanceWidth: coordination.stanceWidth,
+      deadliftStyle: coordination.deadliftStyle,
     }),
-    [anim],
+    [anim, coordination.stanceWidth, coordination.deadliftStyle],
   )
 
   const frame = useMemo(
@@ -191,16 +202,13 @@ function StandingLab() {
   )
 
   const mechanics = state.mechanics
-  const overlay = useMemo(
-    () => buildMechanicsOverlay(frame, solvedTask, exercise, solvedAnthro.height),
-    [frame, solvedTask, exercise, solvedAnthro.height],
-  )
+  const overlay = useMemo(() => buildMechanicsOverlay(frame, solvedTask), [frame, solvedTask])
   const focus = overlay.moments.find((j) => j.id === mechanics.joint)
   const observed =
     focus ?? overlay.moments.find((j) => j.id === (exercise === 'deadlift' ? 'hip' : 'knee'))!
   const selectJoint = useCallback(
     (joint: JointKey | 'all') => {
-      dispatch({ type: 'setMechanics', patch: { joint, moments: true } })
+      dispatch({ type: 'setMechanics', patch: { joint, moments: true, focus: 'all' } })
     },
     [dispatch],
   )
@@ -311,6 +319,7 @@ function StandingLab() {
   )
 
   const chooseMuscle = (id: MuscleId | null) => {
+    setEditingBody(false)
     setMuscle(id)
     if (id && !unavailable) {
       setMode('anatomy')
@@ -323,6 +332,7 @@ function StandingLab() {
   }
   const chooseView = (value: 'anatomy' | 'diagram') => {
     setMode(value)
+    setEditingBody(false)
     setUnavailable(false)
     setSelected(null)
   }
@@ -336,8 +346,8 @@ function StandingLab() {
           load={task.load}
           description={
             exercise === 'deadlift'
-              ? 'Compará la palanca de la barra sobre la cadera en el despegue y en el bloqueo.'
-              : 'Seguí la línea de la barra y compará el giro de cadera y rodilla al descender.'
+              ? 'Compará la bisagra de cadera, la flexión de rodilla y el recorrido de la barra al pasar de convencional a sumo.'
+              : 'Abrí o cerrá la base y observá cómo cambian la postura de la cadera y las rodillas al bajar.'
           }
         />
         <div
@@ -347,7 +357,17 @@ function StandingLab() {
           aria-labelledby={`exercise-${exercise}`}
         >
           <div className="lift-column">
-            <section className="atlas-card viewer-card" aria-label="Simulador del levantamiento">
+            <StanceControls
+              exercise={exercise}
+              anthro={anthro}
+              coordination={coordination}
+              onChange={(patch) => dispatch({ type: 'setCoordination', patch })}
+            />
+            <section
+              className="atlas-card viewer-card"
+              aria-label="Simulador del levantamiento"
+              data-force-focus={mechanics.forces && !editingBody ? mechanics.focus : 'all'}
+            >
               <div className="view-toolbar">
                 <div className="view-modes" role="group" aria-label="Representación">
                   <button aria-pressed={mode === 'anatomy'} onClick={() => chooseView('anatomy')}>
@@ -360,30 +380,67 @@ function StandingLab() {
                   </button>
                 </div>
                 {mode === 'anatomy' && (
-                  <label className="layer-picker">
-                    {layer === 'muscles' ? (
-                      <Layers3 size={15} aria-hidden />
-                    ) : (
-                      <Bone size={15} aria-hidden />
-                    )}
-                    <select
-                      aria-label="Capa anatómica"
-                      value={layer}
-                      onChange={(e) => {
-                        setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
-                        if (e.target.value === 'skeleton') setMuscle(null)
+                  <div className="viewer-actions">
+                    <BodyEditToggle
+                      active={editingBody}
+                      onClick={() => {
+                        stopPlayback()
+                        setEditingBody(!editingBody)
                       }}
-                    >
-                      <option value="muscles">Músculos</option>
-                      <option value="skeleton">Esqueleto</option>
-                    </select>
-                  </label>
+                    />
+                    <label className="layer-picker">
+                      {layer === 'muscles' ? (
+                        <Layers3 size={15} aria-hidden />
+                      ) : (
+                        <Bone size={15} aria-hidden />
+                      )}
+                      <select
+                        aria-label="Capa anatómica"
+                        value={layer}
+                        onChange={(e) => {
+                          setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
+                          if (e.target.value === 'skeleton') setMuscle(null)
+                        }}
+                      >
+                        <option value="muscles">Músculos</option>
+                        <option value="skeleton">Esqueleto</option>
+                      </select>
+                    </label>
+                  </div>
                 )}
               </div>
-              {mode === 'anatomy' && (
+              {mode === 'anatomy' && editingBody && (
+                <BodyEditor
+                  editForces={editForces}
+                  onEditForces={setEditForces}
+                  options={editableHotspotsFor(exercise, frame)}
+                  selected={editPart}
+                  onSelect={setEditPart}
+                >
+                  {bodyParamsFor(editPart, exercise).map((id) => (
+                    <ParamSlider
+                      key={id}
+                      id={id}
+                      setup={setup}
+                      accent={ACCENT}
+                      onChange={setParam}
+                    />
+                  ))}
+                </BodyEditor>
+              )}
+              {mode === 'anatomy' && !editingBody && (
                 <MechanicsControls<JointKey>
                   {...mechanics}
                   options={overlay.moments}
+                  onLoadPath={() =>
+                    dispatch({
+                      type: 'setMechanics',
+                      patch: {
+                        forces: true,
+                        loadPath: !mechanics.forces || !mechanics.loadPath,
+                      },
+                    })
+                  }
                   onForces={() =>
                     dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
                   }
@@ -405,7 +462,9 @@ function StandingLab() {
               <div className={`atlas-viewport ${mode}`} id="lift-viewport" tabIndex={-1}>
                 {mode === 'anatomy' && (
                   <div className="model-hint">
-                    {muscle && layer === 'muscles' ? (
+                    {editingBody ? (
+                      <span>Arrastrá para girar</span>
+                    ) : muscle && layer === 'muscles' ? (
                       <button onClick={() => document.getElementById('muscle-title')?.focus()}>
                         {muscleGuide[muscle].name} <span>Ver ficha</span>
                       </button>
@@ -435,8 +494,11 @@ function StandingLab() {
                         anthro={solvedAnthro}
                         task={solvedTask}
                         layer={layer}
+                        editingBody={editingBody}
+                        editForces={editForces}
+                        editJoint={editPart}
+                        onEditPart={setEditPart}
                         mechanics={mechanics}
-                        jointPeaks={series.peak}
                         peakMoment={peakMoment}
                         onSelectJoint={selectJoint}
                         selectedMuscle={muscle}
@@ -475,6 +537,14 @@ function StandingLab() {
                   />
                 )}
               </div>
+              {mode === 'anatomy' && !editingBody && mechanics.forces && (
+                <ForceReadingGuide
+                  focus={mechanics.focus}
+                  onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
+                  loadPath={mechanics.loadPath}
+                  feetReaction={frame.kinetics.systemWeight}
+                />
+              )}
               <LiftTransport
                 marker={exercise === 'deadlift' ? 'Barra' : 'Cadera'}
                 height={exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y}
@@ -486,6 +556,7 @@ function StandingLab() {
                 slow={slow}
                 onSpeed={() => setSlow(!slow)}
                 onPlay={() => {
+                  setEditingBody(false)
                   setSelected(null)
                   dispatch({ type: 'setPlaying', playing: !state.playing })
                 }}
@@ -538,6 +609,24 @@ function StandingLab() {
             </dl>
           </div>
           <aside className="atlas-rail" aria-label="Guía del movimiento">
+            <StanceComparison
+              exercise={exercise}
+              anthro={solvedAnthro}
+              task={seriesTask}
+              coordination={solvedCoordination}
+              frame={frame}
+              series={series}
+              progress={task.progress}
+              range={progressRange}
+              onJoint={(joint) => {
+                setEditingBody(false)
+                selectJoint(joint)
+                if (!unavailable) setMode('anatomy')
+                if (window.matchMedia('(max-width: 790px)').matches) {
+                  document.getElementById('lift-viewport')?.focus()
+                }
+              }}
+            />
             <section className="atlas-card moments-card" aria-labelledby="moment-title">
               <h2 id="moment-title" className="rail-title">
                 <ChartSpline size={18} aria-hidden /> Momentos articulares
@@ -553,6 +642,7 @@ function StandingLab() {
                 curves={state.showCurves}
                 selected={mechanics.joint}
                 onSelectJoint={(joint) => {
+                  setEditingBody(false)
                   selectJoint(joint)
                   if (!unavailable) setMode('anatomy')
                 }}
