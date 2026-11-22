@@ -1,20 +1,73 @@
-.stance-width-panel:not([hidden]) {
-  display: flex;
-  gap: 12px;
+.stance-controls {
+  display: grid;
+  grid-template-columns: max-content auto;
+  column-gap: 8px;
   align-items: center;
-  padding: 8px 5px 10px;
-  border-top: 1px solid var(--rule);
 }
-.stance-width-input {
-  flex: 1;
+.stance-choices {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stance-choices button,
+.stance-width-trigger {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 4px;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stance-choices button[aria-pressed='true'] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.stance-width-trigger {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stance-width-trigger[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.stance-controls:has(.stance-width-trigger[aria-expanded='true']) {
+  width: min(100%, 360px);
+}
+.stance-width-panel:not([hidden]) {
+  --accent-local: var(--ink);
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
   min-width: 0;
-  max-width: 400px;
+  font-size: 13px;
 }
-.stance-width-input .slider {
-  margin: 0;
+.stance-width-panel input[type='range'] {
+  min-width: 0;
+  height: 44px;
 }
-.stance-width-input .slider-head {
-  margin-bottom: 0;
+.stance-width-panel span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (max-width: 359px) {
+  .stance-controls,
+  .stance-choices {
+    column-gap: 2px;
+  }
+  .stance-choices button,
+  .stance-width-trigger {
+    font-size: 13px;
+  }
 }
 
 .stance-measurements {
@@ -47,7 +100,6 @@
 }
 
 @media (pointer: coarse) {
-  .stance-width-input input[type='range'],
   .stance-comparison .study-joints button {
     min-height: 44px;
   }

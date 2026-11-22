@@ -16,7 +16,7 @@ export interface BodyAdjustment {
 }
 
 export function BodyEditHint() {
-  return <span className="body-edit-hint">Tocá una parte para ajustarla</span>
+  return <span className="body-edit-hint">Arrastrá para girar · Tocá para ajustar</span>
 }
 
 export function BodyEditor<K extends string>({

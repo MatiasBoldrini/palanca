@@ -29,14 +29,14 @@ import type { JointKey } from './model/kinetics'
 import { MomentPanel } from './components/MomentPanel'
 import { Collapsible, Slider } from './components/ui'
 import { usePlayback, useSpringSnapshot } from './hooks/useAnimationEngine'
-import { clamp } from './model/geometry'
+import { clamp, lerp } from './model/geometry'
 import { type HotspotId, type Setup, feasibleRange, editableHotspotsFor } from './model/interact'
 import { standingPartControls } from './model/standingPartControls'
 import type { Coordination, Task } from './model/lift'
 import { simulateSeries, solveFrame } from './model/lift'
 import type { Anthropometry } from './model/anthropometry'
 import { AppStateProvider, useApp } from './state/appState'
-import { AnalysisToggle, LoadButton } from './components/MovementControls'
+import { AnalysisToggle } from './components/MovementControls'
 import './styles/base.css'
 import './styles/app.css'
 
@@ -212,6 +212,21 @@ function StandingLab() {
     setEditPart(part)
     setEditingBody(true)
   }
+  function changeStance(patch: Partial<Coordination>) {
+    const next = feasibleRange('progress', {
+      ...setup,
+      coordination: { ...coordination, ...patch },
+    })
+    const fraction = clamp(
+      (task.progress - progressRange.min) / (progressRange.max - progressRange.min || 1),
+      0,
+      1,
+    )
+    dispatch({
+      type: 'setParams',
+      patch: { coordination: patch, task: { progress: lerp(next.min, next.max, fraction) } },
+    })
+  }
   const setProgress = useCallback(
     (progress: number) =>
       dispatch({
@@ -309,57 +324,6 @@ function StandingLab() {
                 analyzing && mechanics.forces && !editingBody ? mechanics.focus : 'all'
               }
             >
-              <div className="movement-options">
-                <div className="movement-setup">
-                  <StanceControls
-                    key={exercise}
-                    exercise={exercise}
-                    anthro={anthro}
-                    coordination={coordination}
-                    onChange={(patch) => dispatch({ type: 'setCoordination', patch })}
-                  />
-                  <LoadButton load={task.load} onClick={openSettings} />
-                </div>
-                <ViewerToolbar
-                  onSettings={openSettings}
-                  layer={layer}
-                  onLayer={(value) => {
-                    setLayer(value)
-                    if (value === 'skeleton') setMuscle(null)
-                  }}
-                  editingBody={editingBody}
-                  onEdit={() => {
-                    stopPlayback()
-                    setEditingBody(!editingBody)
-                  }}
-                >
-                  {analyzing && !editingBody && (
-                    <MechanicsControls<JointKey>
-                      {...mechanics}
-                      options={overlay.moments}
-                      onLoadPath={() =>
-                        dispatch({
-                          type: 'setMechanics',
-                          patch: {
-                            forces: true,
-                            loadPath: !mechanics.forces || !mechanics.loadPath,
-                          },
-                        })
-                      }
-                      onForces={() =>
-                        dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
-                      }
-                      onMoments={() =>
-                        dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
-                      }
-                      onLever={() =>
-                        dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
-                      }
-                      onJoint={selectJoint}
-                    />
-                  )}
-                </ViewerToolbar>
-              </div>
               <AnatomyStage
                 loadViewer={loadAnatomyViewer}
                 onFailure={stopPlayback}
@@ -461,6 +425,57 @@ function StandingLab() {
                   setProgress(value)
                 }}
               />
+              <div className="movement-options">
+                {!editingBody && (
+                  <StanceControls
+                    key={exercise}
+                    exercise={exercise}
+                    anthro={anthro}
+                    coordination={coordination}
+                    onChange={changeStance}
+                  />
+                )}
+                <ViewerToolbar
+                  load={task.load}
+                  onSettings={openSettings}
+                  layer={layer}
+                  onLayer={(value) => {
+                    setLayer(value)
+                    if (value === 'skeleton') setMuscle(null)
+                  }}
+                  editingBody={editingBody}
+                  onEdit={() => {
+                    stopPlayback()
+                    setEditingBody(!editingBody)
+                  }}
+                >
+                  {analyzing && !editingBody && (
+                    <MechanicsControls<JointKey>
+                      {...mechanics}
+                      options={overlay.moments}
+                      onLoadPath={() =>
+                        dispatch({
+                          type: 'setMechanics',
+                          patch: {
+                            forces: true,
+                            loadPath: !mechanics.forces || !mechanics.loadPath,
+                          },
+                        })
+                      }
+                      onForces={() =>
+                        dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                      }
+                      onMoments={() =>
+                        dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                      }
+                      onLever={() =>
+                        dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                      }
+                      onJoint={selectJoint}
+                    />
+                  )}
+                </ViewerToolbar>
+              </div>
               {!editingBody && (
                 <AnalysisToggle
                   active={analyzing}

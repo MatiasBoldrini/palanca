@@ -1,5 +1,5 @@
 import { ChevronDown, GitCompareArrows } from 'lucide-react'
-import { useMemo } from 'react'
+import { useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Anthropometry } from '../model/anthropometry'
 import { clamp, lerp } from '../model/geometry'
 import { feasibleRange, type Range } from '../model/interact'
@@ -12,8 +12,6 @@ import {
   type Task,
 } from '../model/lift'
 import { defaultStanceWidth, getStance, stanceWidthRange } from '../model/stance'
-import { Slider } from './ui'
-import { ControlDisclosure } from './ControlDisclosure'
 import { formatBarArm } from '../model/mechanicsOverlay'
 import './StanceStudy.css'
 
@@ -34,6 +32,9 @@ export function StanceControls({
   coordination,
   onChange,
 }: SetupProps & { onChange: (patch: Partial<Coordination>) => void }) {
+  const [widthOpen, setWidthOpen] = useState(false)
+  const widthPanelId = useId()
+  const widthButton = useRef<HTMLButtonElement>(null)
   const stance = getStance(exercise, anthro, coordination)
   const style = coordination.deadliftStyle ?? 'conventional'
   const deadlift = exercise === 'deadlift'
@@ -41,66 +42,78 @@ export function StanceControls({
   const normal = defaultStanceWidth(exercise, anthro.height)
   const wide = wideSquat(anthro)
   const centimetres = Math.round(stance.width * 100)
+  const minWidth = Math.ceil(range.min * 100)
+  const maxWidth = Math.floor(range.max * 100)
+  const widthFraction = clamp((centimetres - minWidth) / (maxWidth - minWidth || 1), 0, 1)
   const preset = deadlift
     ? style === 'sumo'
       ? 1
       : 0
     : [normal, wide].findIndex((width) => Math.abs(stance.width - width) < 0.005)
   const names = deadlift ? ['Convencional', 'Sumo'] : ['Base media', 'Base amplia']
-  const name = names[preset] ?? `Base de ${centimetres} cm`
-
   return (
-    <ControlDisclosure
-      className="setup-menu"
-      label={`Cambiar postura, ${name}, ${centimetres} cm entre pies`}
-      trigger={
-        <>
-          {name} <ChevronDown size={14} aria-hidden />
-        </>
-      }
-    >
-      {(close) => (
-        <>
-          <div className="stance-presets" role="group" aria-label="Variante de la base">
-            {names.map((label, index) => (
-              <button
-                key={label}
-                type="button"
-                aria-pressed={index === preset}
-                onClick={() => {
-                  onChange(
-                    deadlift
-                      ? {
-                          deadliftStyle: index === 0 ? 'conventional' : 'sumo',
-                          stanceWidth: undefined,
-                          toeOutDeg: undefined,
-                        }
-                      : { stanceWidth: index === 0 ? undefined : wide, toeOutDeg: undefined },
-                  )
-                  close()
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="stance-width-panel">
-            <div className="stance-width-input">
-              <Slider
-                label="Separación entre los pies"
-                min={Math.ceil(range.min * 100)}
-                max={Math.floor(range.max * 100)}
-                value={centimetres}
-                step={1}
-                format={(v) => v + ' cm'}
-                onChange={(v) => onChange({ stanceWidth: v / 100 })}
-              />
-              <p className="stance-toeout">Puntas a {Math.round(stance.toeOut)}°</p>
-            </div>
-          </div>
-        </>
-      )}
-    </ControlDisclosure>
+    <div className="stance-controls">
+      <div className="stance-choices" role="group" aria-label="Variante de la base">
+        {names.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={index === preset}
+            onClick={() => {
+              if (index === preset) return
+              onChange(
+                deadlift
+                  ? {
+                      deadliftStyle: index === 0 ? 'conventional' : 'sumo',
+                      stanceWidth: undefined,
+                      toeOutDeg: undefined,
+                    }
+                  : { stanceWidth: index === 0 ? undefined : wide, toeOutDeg: undefined },
+              )
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <button
+        ref={widthButton}
+        className="stance-width-trigger"
+        type="button"
+        aria-label={`Ajustar la separación entre los pies, ${centimetres} cm`}
+        aria-expanded={widthOpen}
+        aria-controls={widthPanelId}
+        onClick={() => setWidthOpen(!widthOpen)}
+      >
+        {centimetres} cm <ChevronDown size={14} aria-hidden />
+      </button>
+      <div
+        id={widthPanelId}
+        className="stance-width-panel"
+        hidden={!widthOpen}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return
+          setWidthOpen(false)
+          widthButton.current?.focus({ preventScroll: true })
+        }}
+      >
+        <label htmlFor={`${widthPanelId}-slider`}>Separación</label>
+        <input
+          id={`${widthPanelId}-slider`}
+          type="range"
+          aria-label="Separación entre los pies"
+          aria-valuetext={`${centimetres} cm`}
+          disabled={maxWidth <= minWidth}
+          min={minWidth}
+          max={maxWidth}
+          value={centimetres}
+          step={1}
+          style={{ '--pct': `${widthFraction * 100}%` } as CSSProperties}
+          onChange={(event) => onChange({ stanceWidth: event.currentTarget.valueAsNumber / 100 })}
+        />
+        <span>Puntas a {Math.round(stance.toeOut)}°</span>
+      </div>
+    </div>
   )
 }
 

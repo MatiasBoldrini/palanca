@@ -1,4 +1,4 @@
-import { BookOpen, ChartSpline, ChevronDown } from 'lucide-react'
+import { BookOpen, ChartSpline } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { usePlayback } from '../hooks/useAnimationEngine'
 import {
@@ -13,11 +13,11 @@ import { ForceReadingGuide } from './ForceReadingGuide'
 import { BENCH_JOINTS, benchForces } from '../model/benchOverlay'
 import { BodyEditHint } from './BodyEditor'
 import { BenchBodyEditor } from './BenchBodyEditor'
-import { ControlDisclosure } from './ControlDisclosure'
+import { BenchGripControl } from './BenchGripControl'
 import type { BenchPartId } from '../model/bodyEditing'
 import { AnatomyStage } from './AnatomyStage'
 import { LabFooter, LabHeader } from './LabHeader'
-import { AnalysisToggle, LoadButton } from './MovementControls'
+import { AnalysisToggle } from './MovementControls'
 import { LiftTransport } from './LiftTransport'
 import { ForceBalance, MechanicsControls } from './MechanicsControls'
 import { SharePosture } from './SharePosture'
@@ -184,60 +184,6 @@ export function BenchLab() {
                 analyzing && mechanics.forces && !editingBody ? mechanics.focus : 'all'
               }
             >
-              <div className="movement-options">
-                <div className="movement-setup">
-                  <ControlDisclosure
-                    className="setup-menu"
-                    label={`Ajustar ancho de agarre, ${formatBarArm(2 * arm.grip.z)} entre manos`}
-                    trigger={
-                      <>
-                        Agarre {formatBarArm(2 * arm.grip.z)}
-                        <ChevronDown size={14} aria-hidden />
-                      </>
-                    }
-                  >
-                    {() => <div className="grip-input">{gripSlider}</div>}
-                  </ControlDisclosure>
-                  <LoadButton load={task.load} onClick={openSettings} />
-                </div>
-                <ViewerToolbar
-                  onSettings={openSettings}
-                  layer={layer}
-                  onLayer={setLayer}
-                  editingBody={editingBody}
-                  onEdit={() => {
-                    stop()
-                    setEditingBody(!editingBody)
-                  }}
-                >
-                  {analyzing && !editingBody && (
-                    <MechanicsControls<BenchJointId>
-                      {...mechanics}
-                      options={BENCH_JOINTS}
-                      joint={selected}
-                      onJoint={selectJoint}
-                      onLoadPath={() =>
-                        dispatch({
-                          type: 'setMechanics',
-                          patch: {
-                            forces: true,
-                            loadPath: !mechanics.forces || !mechanics.loadPath,
-                          },
-                        })
-                      }
-                      onForces={() =>
-                        dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
-                      }
-                      onMoments={() =>
-                        dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
-                      }
-                      onLever={() =>
-                        dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
-                      }
-                    />
-                  )}
-                </ViewerToolbar>
-              </div>
               <AnatomyStage
                 loadViewer={loadBenchViewer}
                 onFailure={stop}
@@ -290,6 +236,53 @@ export function BenchLab() {
                   progress(value)
                 }}
               />
+              <div className="movement-options">
+                {!editingBody && (
+                  <BenchGripControl
+                    ratio={bench.gripRatio}
+                    widthM={2 * arm.grip.z}
+                    onChange={(gripRatio) => dispatch({ type: 'setBench', patch: { gripRatio } })}
+                  />
+                )}
+                <ViewerToolbar
+                  load={task.load}
+                  onSettings={openSettings}
+                  layer={layer}
+                  onLayer={setLayer}
+                  editingBody={editingBody}
+                  onEdit={() => {
+                    stop()
+                    setEditingBody(!editingBody)
+                  }}
+                >
+                  {analyzing && !editingBody && (
+                    <MechanicsControls<BenchJointId>
+                      {...mechanics}
+                      options={BENCH_JOINTS}
+                      joint={selected}
+                      onJoint={selectJoint}
+                      onLoadPath={() =>
+                        dispatch({
+                          type: 'setMechanics',
+                          patch: {
+                            forces: true,
+                            loadPath: !mechanics.forces || !mechanics.loadPath,
+                          },
+                        })
+                      }
+                      onForces={() =>
+                        dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                      }
+                      onMoments={() =>
+                        dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                      }
+                      onLever={() =>
+                        dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                      }
+                    />
+                  )}
+                </ViewerToolbar>
+              </div>
               {!editingBody && (
                 <AnalysisToggle
                   active={analyzing && !editingBody}

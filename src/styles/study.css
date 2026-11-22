@@ -30,57 +30,46 @@
   border-radius: 0;
   overflow: visible;
 }
-.movement-options,
-.movement-setup {
-  display: flex;
-  align-items: center;
-}
 .movement-options {
-  flex-wrap: wrap;
-  justify-content: space-between;
-  min-height: 48px;
-  gap: 8px;
-  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 16px;
+  max-width: 720px;
+  margin-inline: auto;
+  padding: 2px clamp(12px, 3vw, 28px);
+  border-block: 1px solid var(--rule);
 }
-.movement-setup {
-  gap: 8px;
+.movement-options .stance-controls {
+  justify-self: start;
 }
-.setup-menu > summary {
-  white-space: nowrap;
-  font-size: 14px;
-  color: var(--ink);
-  padding-inline: 0;
+.movement-options .view-options .control-menu {
+  top: auto;
+  bottom: 100%;
 }
-.setup-menu .control-menu {
-  left: 0;
-  right: auto;
-  width: min(328px, calc(100vw - 32px));
-  padding: 12px;
+.tool-load {
+  width: 100%;
 }
-.setup-menu .slider {
-  margin: 0;
-}
-.setup-menu .slider input {
-  min-height: 44px;
-}
-.movement-load {
-  white-space: nowrap;
-  position: relative;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 8px 0 14px;
+.tool-load span {
   color: var(--muted);
-  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.movement-load::before {
-  content: '';
+.movement-app .viewer-card[data-editing='true'] {
+  position: relative;
+}
+.viewer-card[data-editing='true'] .movement-options {
   position: absolute;
-  width: 1px;
-  height: 12px;
-  left: 0;
-  top: calc(50% - 6px);
-  background: var(--rule);
+  z-index: 3;
+  inset: 0 auto auto 0;
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.viewer-card[data-editing='true'] .body-edit-done {
+  background: #f8f6f0;
+  color: #292b25;
+  border-radius: 4px;
+  padding: 0 8px;
 }
 .movement-app .atlas-viewport {
   height: clamp(300px, calc(100svh - 280px), 640px);
@@ -151,7 +140,8 @@
     height: clamp(250px, calc(100svh - 246px), 650px);
     border-radius: 0;
   }
-  .movement-app .movement-player {
+  .movement-app .movement-player,
+  .movement-options {
     padding-inline: 0;
   }
   .movement-app .study-guide [role='tabpanel'] > section {
@@ -162,9 +152,7 @@
   }
 }
 @media (hover: hover) {
-  .movement-load:hover,
-  .movement-analysis button:hover,
-  .setup-menu summary:hover {
+  .movement-analysis button:hover {
     color: var(--accent);
   }
 }
@@ -264,19 +252,12 @@
     min-height: 44px;
   }
 }
-@media (max-width: 359px) {
-  .movement-options,
-  .movement-setup {
-    gap: 4px;
+@media (max-width: 480px) {
+  .movement-options {
+    column-gap: 8px;
   }
-  .movement-options .control-disclosure > summary {
-    gap: 3px;
-  }
-  .setup-menu > summary {
-    font-size: 13px;
-  }
-  .movement-load {
-    padding-inline: 8px 0;
+  .movement-options .view-options > summary span {
+    display: none;
   }
 }
 @media (min-width: 791px) {
@@ -301,4 +282,61 @@
   border-radius: 6px;
   border: 1px solid #b6b3a7;
   color: #292b25;
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (min-width: 560px) and (max-height: 500px) {
+  .atlas-layout[data-analyzing='false'] .viewer-card[data-editing='false'] {
+    --controls-width: clamp(284px, 38vw, 360px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--controls-width);
+    grid-template-rows: auto auto 1fr;
+    gap: 0 12px;
+    align-items: start;
+
+    & > .atlas-viewport {
+      grid-column: 1;
+      grid-row: 1 / span 3;
+      width: 100%;
+      height: calc(100svh - 84px);
+      margin: 0;
+    }
+    & > :is(.movement-player, .movement-options, .movement-analysis) {
+      grid-column: 2;
+      width: 100%;
+      padding-inline: 0;
+    }
+    & > .movement-player {
+      grid-template-columns: 44px minmax(0, 1fr) 44px;
+      gap: 8px;
+    }
+    & .movement-position {
+      gap: 4px;
+      font-size: 12px;
+    }
+    & > .movement-options {
+      column-gap: 4px;
+    }
+    & .stance-controls {
+      grid-template-columns: max-content minmax(0, 1fr);
+      column-gap: 2px;
+    }
+    & .stance-width-panel {
+      contain: inline-size;
+    }
+    & .view-options > summary span {
+      display: none;
+    }
+    & .playback-options .control-menu,
+    & .view-options .control-menu {
+      top: 100%;
+      bottom: auto;
+    }
+    & .view-options .control-menu {
+      width: var(--controls-width);
+      max-height: calc(100svh - 218px);
+    }
+    & > .model-warnings {
+      grid-column: 1 / -1;
+    }
+  }
 }

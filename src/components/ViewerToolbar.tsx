@@ -6,6 +6,7 @@ import './minimalControls.css'
 type Layer = 'muscles' | 'skeleton'
 
 interface Props {
+  load: number
   layer: Layer
   onLayer: (layer: Layer) => void
   editingBody: boolean
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function ViewerToolbar({
+  load,
   layer,
   onLayer,
   editingBody,
@@ -50,12 +52,25 @@ export function ViewerToolbar({
           label="Herramientas"
           trigger={
             <>
-              Herramientas <ChevronDown size={14} aria-hidden />
+              <SlidersHorizontal size={16} aria-hidden /> <span>Herramientas</span>
             </>
           }
         >
           {(close) => (
             <>
+              <button
+                className="view-option-row tool-load"
+                type="button"
+                aria-haspopup="dialog"
+                aria-label={`Ajustar carga de la barra, ${load} kg`}
+                onClick={() => {
+                  close()
+                  onSettings()
+                  requestAnimationFrame(() => document.getElementById('settings-load')?.focus())
+                }}
+              >
+                Carga de la barra <span>{load.toLocaleString('es-AR')} kg</span>
+              </button>
               <label className="view-option-row">
                 Anatomía
                 <span className="view-select">

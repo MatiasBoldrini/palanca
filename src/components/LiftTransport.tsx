@@ -41,7 +41,7 @@ export function LiftTransport({
     ? phase === 'descending'
       ? 'Bajada'
       : 'Subida'
-    : (stops[selectedStop] ?? 'Recorrido')
+    : (stops[selectedStop] ?? `${pct} % del recorrido`)
   return (
     <div className="movement-player">
       <button
