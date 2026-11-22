@@ -7,6 +7,26 @@ import type { Vec2 } from '../model/geometry'
 import type { BodyPartTarget } from './bodyPartDrawing'
 import { armLandmarks } from './rig'
 
+/** Resolve taps on the ends of a limb to the joint under the visible surface. */
+export function standingPartAt(
+  zone: HotspotId,
+  hit: WorldPoint,
+  frame: Frame,
+  anthro: Anthropometry,
+): HotspotId {
+  function near(joint: 'ankle' | 'knee' | 'hip', radius: number) {
+    const point = frame.posture[joint]
+    const z = jointLateralOffset(joint, frame.stance)
+    return (
+      Math.hypot(hit.x - point.x, hit.y - point.y, Math.abs(hit.z) - z) <= anthro.height * radius
+    )
+  }
+  if ((zone === 'foot' || zone === 'shank') && near('ankle', 0.035)) return 'ankle'
+  if ((zone === 'shank' || zone === 'thigh') && near('knee', 0.047)) return 'knee'
+  if (zone === 'thigh' && near('hip', 0.06)) return 'hip'
+  return zone
+}
+
 export function standingTargets(
   frame: Frame,
   anthro: Anthropometry,
@@ -16,7 +36,7 @@ export function standingTargets(
   const p = frame.posture
   const world = (v: Vec2, z = 0): WorldPoint => ({ x: v.x, y: v.y, z })
   const offset = (joint: 'hip' | 'knee' | 'ankle') => side * jointLateralOffset(joint, frame.stance)
-  const arm = armLandmarks(frame, anthro, exercise, side)
+  const arm = armLandmarks(frame, side)
   const foot = (v: Vec2) => world(v, side * lateralAlongFoot(frame.stance, p.ankle.x, v.x))
   const hip = world(p.hip, offset('hip')),
     knee = world(p.knee, offset('knee')),

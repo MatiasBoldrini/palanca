@@ -7,58 +7,10 @@
   pointer-events: none;
   user-select: none;
 }
-.body-part-leader {
-  stroke: #767c70;
-  stroke-width: 0.9;
-  stroke-dasharray: 3 2;
-  fill: none;
-}
-.body-part-leader.selected {
-  stroke: #70482d;
-  stroke-width: 1.7;
-  stroke-dasharray: none;
-}
-.body-part-hit {
-  fill: transparent;
-}
 .body-part-ring {
   fill: #fcfaf5;
-  stroke: #696957;
-  stroke-width: 1.6;
-}
-.body-part-dot {
-  fill: #696957;
-}
-.body-part-anchor.selected .body-part-ring {
   stroke: #88542c;
-  stroke-width: 2.2;
-}
-.body-part-anchor.selected .body-part-dot {
-  fill: #88542c;
-}
-.body-part-label,
-.body-part-anchor {
-  pointer-events: all;
-  cursor: pointer;
-}
-.body-part-card {
-  fill: #fffdf7;
-  stroke: #bdc1b3;
-  stroke-width: 1;
-}
-.body-part-text {
-  font-size: 11.5px;
-  font-weight: 550;
-  fill: #3c4036;
-}
-.body-part-label[aria-pressed='true'] .body-part-card,
-.body-part-label:focus-visible .body-part-card {
-  stroke: #875a37;
-  stroke-width: 1.7;
-  fill: #f1e9d6;
-}
-.body-part-label:hover .body-part-card {
-  fill: #eeeee4;
+  stroke-width: 2;
 }
 .anatomy-viewer.editing-body:not(.edit-forces) .load-path-drawing,
 .anatomy-viewer.editing-body:not(.edit-forces) .mechanics-overlay {

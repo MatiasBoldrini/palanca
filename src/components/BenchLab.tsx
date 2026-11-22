@@ -1,16 +1,20 @@
 import { BookOpen, ChartSpline, ChevronDown } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { usePlayback } from '../hooks/useAnimationEngine'
-import { BENCH_GRIP, buildBenchFrame, type BenchJointId } from '../model/bench'
+import {
+  BENCH_GRIP,
+  buildBenchFrame,
+  type BenchJointId,
+  type BenchPoseSettings,
+} from '../model/bench'
 import { formatBarArm, formatMoment } from '../model/mechanicsOverlay'
 import { useApp } from '../state/appState'
 import { ForceReadingGuide } from './ForceReadingGuide'
 import { BENCH_JOINTS, benchForces } from '../model/benchOverlay'
-import { BodyEditor } from './BodyEditor'
+import { BodyEditHint } from './BodyEditor'
+import { BenchBodyEditor } from './BenchBodyEditor'
 import { ControlDisclosure } from './ControlDisclosure'
-import { BENCH_PARTS, type BenchPartId } from '../model/bodyEditing'
-import { PARAM_LIMITS } from '../model/interact'
-import { PARAM_UI } from './params'
+import type { BenchPartId } from '../model/bodyEditing'
 import { BenchDiagram } from './BenchDiagram'
 import { LabFooter, LabHeader } from './LabHeader'
 import { AnalysisToggle, LoadButton } from './MovementControls'
@@ -51,10 +55,37 @@ export function BenchLab() {
   const [editForces, setEditForces] = useState(false)
   const [editPart, setEditPart] = useState<BenchPartId>('arm')
   const [slow, setSlow] = useState(false)
+  const {
+    gripRatio,
+    footSlideCm,
+    footYawDeg,
+    elbowTurnDeg,
+    torsoTiltDeg,
+    bodySlideCm,
+    barShiftCm,
+  } = bench
   const frameAt = useCallback(
-    (t: number) =>
-      buildBenchFrame(t, task.load, anthro.height, anthro.mass, bench.gripRatio, anthro),
-    [task.load, anthro, bench.gripRatio],
+    (t: number, patch?: Partial<BenchPoseSettings>) =>
+      buildBenchFrame(t, task.load, anthro.height, anthro.mass, gripRatio, anthro, {
+        footSlideCm,
+        footYawDeg,
+        elbowTurnDeg,
+        torsoTiltDeg,
+        bodySlideCm,
+        barShiftCm,
+        ...patch,
+      }),
+    [
+      task.load,
+      anthro,
+      gripRatio,
+      footSlideCm,
+      footYawDeg,
+      elbowTurnDeg,
+      torsoTiltDeg,
+      bodySlideCm,
+      barShiftCm,
+    ],
   )
   const frame = useMemo(() => frameAt(bench.progress), [frameAt, bench.progress])
   const series = useMemo(() => Array.from({ length: 65 }, (_, i) => frameAt(i / 64)), [frameAt])
@@ -100,6 +131,14 @@ export function BenchLab() {
     [dispatch],
   )
   const stop = useCallback(() => dispatch({ type: 'setPlaying', playing: false }), [dispatch])
+  const openPart = useCallback(
+    (part: BenchPartId) => {
+      stop()
+      setEditPart(part)
+      setEditingBody(true)
+    },
+    [stop],
+  )
   function openSettings() {
     stop()
     setSettings(true)
@@ -134,30 +173,6 @@ export function BenchLab() {
       onChange={(v) => dispatch({ type: 'setBench', patch: { gripRatio: v } })}
     />
   )
-  const partSettings =
-    editPart === 'grip' ? (
-      gripSlider
-    ) : editPart === 'bar' ? (
-      <Slider
-        label="Carga de la barra"
-        value={task.load}
-        min={PARAM_LIMITS.load.min}
-        max={PARAM_LIMITS.load.max}
-        step={PARAM_UI.load.step}
-        format={PARAM_UI.load.format}
-        onChange={(load) => dispatch({ type: 'setTask', patch: { load } })}
-      />
-    ) : (
-      <Slider
-        label={PARAM_UI[editPart].label}
-        value={Number((anthro[editPart] * 100).toFixed(2))}
-        min={Math.round(PARAM_LIMITS[editPart].min * 100)}
-        max={Math.round(PARAM_LIMITS[editPart].max * 100)}
-        step={PARAM_UI[editPart].step}
-        format={PARAM_UI[editPart].format}
-        onChange={(size) => dispatch({ type: 'setAnthro', patch: { [editPart]: size / 100 } })}
-      />
-    )
   return (
     <div className="atlas-app movement-app">
       <LabHeader />
@@ -171,6 +186,7 @@ export function BenchLab() {
             <section
               className="atlas-card viewer-card"
               aria-label="Simulador del levantamiento"
+              data-editing={editingBody}
               data-force-focus={
                 analyzing && mechanics.forces && !editingBody ? mechanics.focus : 'all'
               }
@@ -235,26 +251,13 @@ export function BenchLab() {
                   )}
                 </ViewerToolbar>
               </div>
-              {editingBody && (
-                <BodyEditor
-                  editForces={editForces}
-                  onEditForces={setEditForces}
-                  selected={editPart}
-                  onSelect={setEditPart}
-                  options={(Object.keys(BENCH_PARTS) as BenchPartId[]).map((id) => ({
-                    id,
-                    label: BENCH_PARTS[id],
-                  }))}
-                >
-                  {partSettings}
-                </BodyEditor>
-              )}
               {unavailable && (
                 <p className="fallback-note" role="status">
                   Se abrió el diagrama del mismo movimiento porque el visor 3D no pudo iniciarse.
                 </p>
               )}
               <div className={'atlas-viewport ' + mode} id="lift-viewport" tabIndex={-1}>
+                {mode === 'anatomy' && !editingBody && <BodyEditHint />}
                 {mode === 'anatomy' ? (
                   <ViewerBoundary onUnavailable={fallback}>
                     <Suspense
@@ -272,7 +275,7 @@ export function BenchLab() {
                         editingBody={editingBody}
                         editForces={editForces}
                         editPart={editPart}
-                        onEditPart={setEditPart}
+                        onEditPart={openPart}
                         showForces={mechanics.forces}
                         showLoadPath={mechanics.loadPath}
                         showMoments={mechanics.moments}
@@ -294,12 +297,24 @@ export function BenchLab() {
                     editingBody={editingBody}
                     editForces={editForces}
                     editPart={editPart}
-                    onEditPart={setEditPart}
+                    onEditPart={openPart}
                     joint={selected}
                     peak={peak}
                   />
                 )}
               </div>
+              {editingBody && (
+                <BenchBodyEditor
+                  frame={frame}
+                  frameAt={frameAt}
+                  series={series}
+                  selected={editPart}
+                  onSelect={setEditPart}
+                  editForces={editForces}
+                  onEditForces={setEditForces}
+                  gripSlider={gripSlider}
+                />
+              )}
               <LiftTransport
                 marker="Barra"
                 height={frame.bar.y}
@@ -319,13 +334,15 @@ export function BenchLab() {
                   progress(value)
                 }}
               />
-              <AnalysisToggle
-                active={analyzing && !editingBody}
-                onChange={(active) => {
-                  setEditingBody(false)
-                  dispatch({ type: 'setAnalyzing', value: active })
-                }}
-              />
+              {!editingBody && (
+                <AnalysisToggle
+                  active={analyzing && !editingBody}
+                  onChange={(active) => {
+                    setEditingBody(false)
+                    dispatch({ type: 'setAnalyzing', value: active })
+                  }}
+                />
+              )}
               {analyzing && !editingBody && (
                 <p className="pose-explanation">
                   <strong>{BENCH_JOINTS.find((j) => j.id === observed)?.label}.</strong> La vertical

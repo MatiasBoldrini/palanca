@@ -57,7 +57,8 @@ export function createBenchRig(body: Pick<Body, 'root' | 'style' | 'barbell'>) {
         .clone()
         .lerp(shoulder, (level - restSpine[0].from.y) / (restSpine[5].from.y - restSpine[0].from.y))
     for (const ref of restSpine) {
-      const end = ref.name === 'head' ? vector(frame.pose.head).lerp(shoulder, -0.4) : spine(ref.to.y)
+      const end =
+        ref.name === 'head' ? vector(frame.pose.head).lerp(shoulder, -0.4) : spine(ref.to.y)
       segment(ref, spine(ref.from.y), end, up, scale)
     }
     restLimbs.forEach((ref, i) => {
@@ -82,7 +83,7 @@ export function createBenchRig(body: Pick<Body, 'root' | 'style' | 'barbell'>) {
         heel = vector(leg.heel)
       const forward = toe.sub(heel).setY(0).normalize()
       const foot = new Matrix4().makeBasis(forward, up, forward.clone().cross(up))
-      const footWidth = Math.abs(leg.toe.x - leg.heel.x) / 0.215
+      const footWidth = Math.hypot(leg.toe.x - leg.heel.x, leg.toe.z - leg.heel.z) / 0.215
       foot.scale(new Vector3(footWidth, ankle.y / ref.ankle.y, scale))
       foot.setPosition(ref.ankle.clone().applyMatrix4(foot).negate().add(ankle))
       apply('foot' + ref.side, foot)

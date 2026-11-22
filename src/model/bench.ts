@@ -9,6 +9,7 @@ import {
   TRUNK_LINK_FRACTION,
 } from './anthropometry'
 import { clamp } from './geometry'
+import { bendArm } from './armGeometry'
 
 /** Supine world coordinates in metres: +X toward the head, +Y up, Z across the bench. */
 export interface BenchPoint {
@@ -42,6 +43,8 @@ export type BenchSegments = Pick<Anthropometry, 'shank' | 'thigh' | 'torso' | 'a
 export interface BenchFrame {
   segments: BenchSegments & { height: number }
   bar: BenchPoint
+  barRangeX: { min: number; max: number }
+  maxBarShiftCm: number
   bodyCom: BenchPoint
   benchSupport: BenchPoint
   footSupport: BenchPoint
@@ -59,6 +62,34 @@ export interface BenchFrame {
   }
 }
 
+/** Symmetric setup offsets relative to the original bench posture. */
+export const BENCH_POSE_LIMITS = {
+  footSlideCm: { min: -14, max: 12, default: 0 },
+  footYawDeg: { min: 0, max: 35, default: 0 },
+  elbowTurnDeg: { min: -30, max: 30, default: 0 },
+  torsoTiltDeg: { min: -4, max: 4, default: 0 },
+  bodySlideCm: { min: -8, max: 8, default: 0 },
+  barShiftCm: { min: -8, max: 5, default: 0 },
+} as const
+export type BenchPoseSettings = Record<keyof typeof BENCH_POSE_LIMITS, number>
+
+export function readBenchPose(value: unknown): BenchPoseSettings {
+  const saved = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const pose = {} as BenchPoseSettings
+  for (const key of Object.keys(BENCH_POSE_LIMITS) as (keyof BenchPoseSettings)[]) {
+    const v = saved[key]
+    const limits = BENCH_POSE_LIMITS[key]
+    pose[key] =
+      typeof v === 'number' && Number.isFinite(v)
+        ? clamp(v, limits.min, limits.max)
+        : limits.default
+  }
+  return pose
+}
+export const DEFAULT_BENCH_POSE = readBenchPose(null)
+const radians = (deg: number) => (deg * Math.PI) / 180
+const degrees = (rad: number) => (rad * 180) / Math.PI
+
 export const BENCH_GRIP = { min: 1, max: 2, default: 1.5 } as const
 export const benchPointDistance = (a: BenchPoint, b: BenchPoint): number =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
@@ -73,33 +104,24 @@ type ArmPoints = Omit<BenchArm, 'moments'>
 function placeArm(
   side: number,
   shoulderHalfWidth: number,
+  shoulderX: number,
   shoulderY: number,
   bar: BenchPoint,
   gripHalfWidth: number,
   armLength: number,
+  elbowTurnDeg: number,
 ): ArmPoints {
-  const shoulder = at(0, shoulderY, side * shoulderHalfWidth)
+  const shoulder = at(shoulderX, shoulderY, side * shoulderHalfWidth)
   const grip = at(bar.x, bar.y, side * gripHalfWidth)
   const upper = armLength * 0.52
   const lower = armLength - upper
-  const span = benchPointDistance(grip, shoulder)
-  const axis = at(grip.x / span, (grip.y - shoulder.y) / span, (grip.z - shoulder.z) / span)
-  const pole = at(-0.42, -1, side * 0.18)
-  const dot = pole.x * axis.x + pole.y * axis.y + pole.z * axis.z
-  const normal = at(pole.x - dot * axis.x, pole.y - dot * axis.y, pole.z - dot * axis.z)
-  const normalLength = Math.hypot(normal.x, normal.y, normal.z)
-  const elbowPlaneNormal = at(
-    (axis.y * normal.z - axis.z * normal.y) / normalLength,
-    (axis.z * normal.x - axis.x * normal.z) / normalLength,
-    (axis.x * normal.y - axis.y * normal.x) / normalLength,
-  )
-  const along = (upper * upper - lower * lower + span * span) / (2 * span)
-  const radius = Math.sqrt(Math.max(0, upper * upper - along * along))
-  const off = radius / normalLength
-  const elbow = at(
-    shoulder.x + along * axis.x + off * normal.x,
-    shoulder.y + along * axis.y + off * normal.y,
-    shoulder.z + along * axis.z + off * normal.z,
+  const { elbow, elbowPlaneNormal } = bendArm(
+    shoulder,
+    grip,
+    at(-0.42, -1, side * 0.18),
+    upper,
+    lower,
+    -side * radians(elbowTurnDeg),
   )
   const wrist = between(elbow, grip, 0.87)
   return { shoulder, elbow, wrist, grip, elbowPlaneNormal }
@@ -135,7 +157,12 @@ function loadArm(points: ArmPoints, bodyKg: number, barKg: number) {
 
 /** Keep both rigid links at their measured lengths while placing the sole flat
  * on the floor. Prefer a nearly vertical shin within the reachable knee heights. */
-function placeLeg(side: number, hipMid: BenchPoint, dimensions: BenchFrame['segments']): BenchLeg {
+function placeLeg(
+  side: number,
+  hipMid: BenchPoint,
+  dimensions: BenchFrame['segments'],
+  pose: BenchPoseSettings,
+): BenchLeg {
   const { height, shank, thigh, foot: footLength } = dimensions
   const hip = at(hipMid.x, hipMid.y, (side * LENGTH_FRACTION.hipWidth * height) / 2)
   const kneeZ = side * 0.115 * height
@@ -148,15 +175,89 @@ function placeLeg(side: number, hipMid: BenchPoint, dimensions: BenchFrame['segm
   const kneeY = clamp(preferredKneeY, hip.y - thighReach, hip.y + thighReach)
   const thighDx = Math.sqrt(Math.max(0, thighReachSq - (hip.y - kneeY) ** 2))
   const shinDx = Math.sqrt(Math.max(0, shinReachSq - (ankleY - kneeY) ** 2))
-  const knee = at(hip.x - thighDx, kneeY, kneeZ)
-  const ankle = at(knee.x + shinDx, ankleY, ankleZ)
-  return {
-    hip,
-    knee,
-    ankle,
-    heel: at(ankle.x + footLength / 4, 0, ankleZ),
-    toe: at(ankle.x - (footLength * 3) / 4, 0, ankleZ),
+  // Solve the knee in the sagittal plane after accounting for the lateral
+  // separation of each joint. Choose the forward knee of the two IK solutions.
+  const neutralAnkleX = hip.x - thighDx + shinDx
+  const vertical = ankleY - hip.y
+  const maxReachX = Math.sqrt(
+    Math.max(0, (thighReach + Math.sqrt(shinReachSq)) ** 2 - vertical ** 2),
+  )
+  const ankleX = clamp(neutralAnkleX + pose.footSlideCm / 100, hip.x - maxReachX, hip.x - 0.02)
+  const ankle = at(ankleX, ankleY, ankleZ)
+  const dx = ankleX - hip.x
+  const span = Math.hypot(dx, vertical)
+  const along = (thighReachSq - shinReachSq + span ** 2) / (2 * span)
+  const off = Math.sqrt(Math.max(0, thighReachSq - along ** 2))
+  const knee = at(
+    hip.x + (along * dx + off * vertical) / span,
+    hip.y + (along * vertical - off * dx) / span,
+    kneeZ,
+  )
+  const yaw = radians(pose.footYawDeg)
+  const sole = (length: number) =>
+    at(ankleX - length * Math.cos(yaw), 0, ankleZ + side * length * Math.sin(yaw))
+  return { hip, knee, ankle, heel: sole(-footLength / 4), toe: sole((footLength * 3) / 4) }
+}
+
+/** Flexion measured between rigid links, with full extension at zero. */
+function jointFlexion(a: BenchPoint, joint: BenchPoint, b: BenchPoint) {
+  const first = benchPointDistance(a, joint),
+    second = benchPointDistance(joint, b)
+  const span = benchPointDistance(a, b)
+  return degrees(
+    Math.acos(clamp((span ** 2 - first ** 2 - second ** 2) / (2 * first * second), -1, 1)),
+  )
+}
+export const benchKneeFlexion = (leg: BenchLeg) => jointFlexion(leg.hip, leg.knee, leg.ankle)
+export const benchElbowFlexion = (arm: BenchArm) => jointFlexion(arm.shoulder, arm.elbow, arm.grip)
+
+/** Select the closest phase with the requested elbow angle. A path with a
+ * footward offset can have a shallow maximum just above the chest. */
+export function progressAtElbowFlexion(
+  target: number,
+  current: number,
+  angles: number[],
+  frameAt: (t: number) => BenchFrame,
+) {
+  if (target <= 0) return 1
+  const count = angles.length - 1
+  let bracket = -1
+  for (let i = 0; i < count; i++) {
+    if ((target - angles[i]) * (target - angles[i + 1]) > 0) continue
+    if (
+      bracket < 0 ||
+      Math.abs((i + 0.5) / count - current) < Math.abs((bracket + 0.5) / count - current)
+    )
+      bracket = i
   }
+  if (bracket < 0) {
+    const nearest = angles.reduce(
+      (best, angle, i) => (Math.abs(angle - target) < Math.abs(angles[best] - target) ? i : best),
+      0,
+    )
+    return nearest / count
+  }
+  let lo = bracket / count,
+    hi = (bracket + 1) / count
+  const increasing = angles[bracket + 1] > angles[bracket]
+  for (let i = 0; i < 15; i++) {
+    const mid = (lo + hi) / 2
+    if (benchElbowFlexion(frameAt(mid).arms[0]) < target === increasing) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
+/** Change the foot position needed to reach a knee angle with the sole planted. */
+export function footSlideAtKneeAngle(neutral: BenchLeg, flexion: number) {
+  const thigh = benchPointDistance(neutral.hip, neutral.knee),
+    shin = benchPointDistance(neutral.knee, neutral.ankle)
+  const dz = neutral.hip.z - neutral.ankle.z,
+    dy = neutral.hip.y - neutral.ankle.y
+  const reachSq = thigh ** 2 + shin ** 2 + 2 * thigh * shin * Math.cos(radians(flexion))
+  return (
+    100 * (neutral.hip.x - neutral.ankle.x - Math.sqrt(Math.max(0, reachSq - dz ** 2 - dy ** 2)))
+  )
 }
 
 function legMasses(leg: BenchLeg, bodyKg: number): PointMass[] {
@@ -182,6 +283,7 @@ export function buildBenchFrame(
   massKg: number,
   gripRatio: number = BENCH_GRIP.default,
   segments: BenchSegments = anthropometryFromHeight(heightM, massKg),
+  pose: BenchPoseSettings = DEFAULT_BENCH_POSE,
 ): BenchFrame {
   const dimensions = {
     height: heightM,
@@ -198,46 +300,76 @@ export function buildBenchFrame(
   const shoulderHalf = (LENGTH_FRACTION.shoulderWidth * heightM) / 2
   const gripHalf = shoulderHalf * grip
   const length = dimensions.arm
-  const lockoutY = shoulderY + Math.sqrt(length * length - (gripHalf - shoulderHalf) ** 2)
-  const bottomY = benchHeight + 0.143 * heightM
-  // A longer trunk moves the chest contact footward while lockout remains
-  // over the shoulders. Its position at the chest must be within arm reach.
-  const chestOffset = Math.min(
-    (0.1 / LENGTH_FRACTION.torso) * dimensions.torso,
-    Math.sqrt(Math.max(0, (lockoutY - shoulderY) ** 2 - (bottomY - shoulderY) ** 2)),
+  const shoulderX = pose.bodySlideCm / 100
+  const neutralTilt = Math.asin((0.019 * heightM) / dimensions.torso)
+  const trunkAngle = neutralTilt + radians(pose.torsoTiltDeg)
+  const hip = at(
+    shoulderX - dimensions.torso * Math.cos(trunkAngle),
+    shoulderY - dimensions.torso * Math.sin(trunkAngle),
   )
-  const remaining = 1 - t
-  const bar = at(
-    -chestOffset * remaining * (0.75 + 0.25 * Math.sqrt(remaining)),
-    lockoutY - (lockoutY - bottomY) * remaining,
-  )
-  const arms = ([1, -1] as const).map((side) =>
-    loadArm(placeArm(side, shoulderHalf, shoulderY, bar, gripHalf, length), massKg, loadKg),
-  )
-  const hipY = benchHeight + 0.055 * heightM
-  const hip = at(-Math.sqrt(dimensions.torso ** 2 - (shoulderY - hipY) ** 2), hipY)
-  const shoulderMid = at(0, shoulderY)
+  const shoulderMid = at(shoulderX, shoulderY)
   const chest = between(hip, shoulderMid, 0.69)
   chest.y += 0.012 * heightM
-  const neck = at(0.045 * heightM, benchHeight + 0.064 * heightM)
-  const head = at(LENGTH_FRACTION.headCom * heightM, benchHeight + 0.059 * heightM)
-  const legs: [BenchLeg, BenchLeg] = [placeLeg(1, hip, dimensions), placeLeg(-1, hip, dimensions)]
+  const neck = at(shoulderX + 0.045 * heightM, benchHeight + 0.064 * heightM)
+  const head = at(shoulderX + LENGTH_FRACTION.headCom * heightM, benchHeight + 0.059 * heightM)
+  const legs: [BenchLeg, BenchLeg] = [
+    placeLeg(1, hip, dimensions, pose),
+    placeLeg(-1, hip, dimensions, pose),
+  ]
   const l5 = between(hip, shoulderMid, TRUNK_LINK_FRACTION.pelvis)
   const t12 = between(hip, shoulderMid, TRUNK_LINK_FRACTION.pelvis + TRUNK_LINK_FRACTION.lumbar)
-  const masses: PointMass[] = [
-    ...arms.flatMap((a) => a.bodyMasses),
+  const stationaryMasses: PointMass[] = [
     ...legs.flatMap((l) => legMasses(l, massKg)),
     { at: between(hip, l5, SEGMENT_COM.pelvis), kg: SEGMENT_MASS.pelvis * massKg },
     { at: between(l5, t12, SEGMENT_COM.lumbar), kg: SEGMENT_MASS.lumbar * massKg },
     { at: between(t12, shoulderMid, SEGMENT_COM.thorax), kg: SEGMENT_MASS.thorax * massKg },
     { at: head, kg: SEGMENT_MASS.headNeck * massKg },
   ]
+  // Even if the entire arm mass lay a full arm length headward, the
+  // resultant of body and bar must stay inside the foot–bench support span.
+  const stationaryLever = stationaryMasses.reduce((sum, m) => sum + m.kg * (shoulderX - m.at.x), 0)
+  const maxBarShiftCm =
+    loadKg > 0
+      ? clamp(
+          Math.floor((1000 * (stationaryLever - massKg * SEGMENT_MASS.arms * length)) / loadKg) /
+            10,
+          0,
+          BENCH_POSE_LIMITS.barShiftCm.max,
+        )
+      : BENCH_POSE_LIMITS.barShiftCm.max
+  const shift = Math.min(pose.barShiftCm, maxBarShiftCm) / 100
+  const sagittalReachSq = length ** 2 - (gripHalf - shoulderHalf) ** 2
+  const lockoutY = shoulderY + Math.sqrt(sagittalReachSq - shift ** 2)
+  // Keep the contact height above the tilted chest. At the reference tilt
+  // the contact is at 0.143 H above the pad; the fore/aft offset then follows
+  // the local slope of the torso.
+  const neutralChestY = benchHeight + (0.055 * 0.31 + 0.074 * 0.69 + 0.012) * heightM
+  const bottomY =
+    benchHeight + 0.143 * heightM + (chest.y - neutralChestY) + shift * Math.tan(trunkAngle)
+  // The chest position and the chosen hand placement must be within arm reach.
+  const chestOffset = Math.min(
+    (0.1 / LENGTH_FRACTION.torso) * dimensions.torso,
+    Math.sqrt(Math.max(0, sagittalReachSq - (bottomY - shoulderY) ** 2)) + shift,
+  )
+  const remaining = 1 - t
+  const bar = at(
+    shoulderX + shift - chestOffset * remaining * (0.75 + 0.25 * Math.sqrt(remaining)),
+    lockoutY - (lockoutY - bottomY) * remaining,
+  )
+  const arms = ([1, -1] as const).map((side) =>
+    loadArm(
+      placeArm(side, shoulderHalf, shoulderX, shoulderY, bar, gripHalf, length, pose.elbowTurnDeg),
+      massKg,
+      loadKg,
+    ),
+  )
+  const masses = [...stationaryMasses, ...arms.flatMap((a) => a.bodyMasses)]
   const bodyCom = at(0, 0)
   for (const mass of masses) {
     bodyCom.x += (mass.at.x * mass.kg) / massKg
     bodyCom.y += (mass.at.y * mass.kg) / massKg
   }
-  const benchSupport = at(0, benchHeight)
+  const benchSupport = at(shoulderX, benchHeight)
   const footSupport = at((legs[0].heel.x + legs[0].toe.x) / 2, 0)
   const barN = -loadKg * GRAVITY
   const bodyN = -massKg * GRAVITY
@@ -248,6 +380,8 @@ export function buildBenchFrame(
   return {
     segments: dimensions,
     bar,
+    barRangeX: { min: shoulderX + shift - chestOffset, max: shoulderX + shift },
+    maxBarShiftCm,
     bodyCom,
     benchSupport,
     footSupport,

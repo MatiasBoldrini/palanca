@@ -5,7 +5,8 @@ import { touchCameraHint, ViewerCameraControls } from '../anatomy/viewerCameraCo
 import { createAnatomicalBody, type MuscleId } from '../anatomy/body'
 import { createMechanicsDrawing, FORCE_LENGTH_IN_HEIGHTS } from '../anatomy/mechanicsDrawing'
 import { createBodyPartDrawing } from '../anatomy/bodyPartDrawing'
-import { standingTargets } from '../anatomy/standingTargets'
+import { listenForBodyPart } from '../anatomy/bodyPartPicking'
+import { standingPartAt, standingTargets } from '../anatomy/standingTargets'
 import { lateralAlongFoot } from '../model/jointLandmarks'
 import type { HotspotId } from '../model/interact'
 import { createLoadPathDrawing } from '../anatomy/loadPathDrawing'
@@ -36,7 +37,6 @@ interface Props {
   postures?: readonly Posture[]
   layer: 'muscles' | 'skeleton'
   selectedMuscle: MuscleId | null
-  onSelectMuscle: (id: MuscleId | null) => void
   onUnavailable: () => void
 }
 
@@ -188,7 +188,7 @@ function createStudio(
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 25)
   const loadPath = createLoadPathDrawing(host)
   const drawing = createMechanicsDrawing(host, (id) => data().onSelectJoint(id))
-  const bodyParts = createBodyPartDrawing<HotspotId>(host, (part) => data().onEditPart?.(part))
+  const bodyParts = createBodyPartDrawing<HotspotId>(host)
   const controls = new ViewerCameraControls(camera, canvas)
   controls.enableDamping = false
   controls.enablePan = false
@@ -214,10 +214,9 @@ function createStudio(
   let fittedWidth = 0
   let fittedToeOut = 0
   const sweep = { left: 0, right: 0, top: 0, bottom: 0 }
-  const ray = new THREE.Raycaster()
-  const pointer = new THREE.Vector2()
   let body: Body | undefined
   let posed: Props | undefined
+  let pickedSide: number | undefined
   let width = 0
   let height = 0
   let visible = true
@@ -228,7 +227,6 @@ function createStudio(
   let previousFrameTime = 0
   let slowFrames = 0
   let reducedPlayback = false
-  let pickedMuscle: MuscleId | null = null
   let turn: {
     start: number
     yaw: number
@@ -389,15 +387,8 @@ function createStudio(
       })
       renderer.shadowMap.needsUpdate = true
       // A group chosen from the list can be on the far side of the body.
-      // A group picked directly in the scene is already in view.
       const group = next.selectedMuscle
-      if (
-        !next.editingBody &&
-        !posed?.editingBody &&
-        group &&
-        group !== pickedMuscle &&
-        next.layer === 'muscles'
-      ) {
+      if (!next.editingBody && !posed?.editingBody && group && next.layer === 'muscles') {
         const anterior = group === 'quadriceps' || group === 'core'
         const posterior =
           group === 'glutes' ||
@@ -409,8 +400,8 @@ function createStudio(
         if (posterior && facing > -0.2) setView('rear')
         if (anterior && facing < 0.2) setView('oblique')
       }
-      pickedMuscle = null
     }
+    if (posed?.editingBody && !next.editingBody) pickedSide = undefined
     posed = next
     if (turn) {
       const t = reducedMotion.matches ? 1 : Math.min(1, (performance.now() - turn.start) / 360)
@@ -424,7 +415,7 @@ function createStudio(
     renderer.render(scene, camera)
     if (next.editingBody) {
       camera.getWorldDirection(direction)
-      const side = direction.z > 0 ? -1 : 1
+      const side = pickedSide ?? (direction.z > 0 ? -1 : 1)
       const targets = standingTargets(next.frame, next.anthro, next.exercise, side)
       if (next.editForces) {
         const edit = {
@@ -567,63 +558,21 @@ function createStudio(
     event.stopPropagation()
   }
 
-  // OrbitControls owns capture. Track the entire gesture so releasing after
-  // dragging (or pinching back to its start) can never select a muscle.
-  let tap: { id: number; x: number; y: number } | null = null
-  function down(e: PointerEvent) {
-    if (!e.isPrimary || e.button !== 0) {
-      tap = null
-      return
-    }
-    tap = { id: e.pointerId, x: e.clientX, y: e.clientY }
-  }
-  function move(e: PointerEvent) {
-    if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 5) tap = null
-  }
-  function cancelTap() {
-    tap = null
-  }
-  function pick(e: PointerEvent) {
-    if (tap?.id !== e.pointerId) return
-    move(e)
-    if (!tap || !body || (!data().editingBody && data().layer !== 'muscles')) return
-    tap = null
-    if (requested) draw()
-    const rect = canvas.getBoundingClientRect()
-    pointer.set(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      (-(e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    ray.setFromCamera(pointer, camera)
-    for (const { object } of ray.intersectObject(body.root, true)) {
-      if (
-        object instanceof THREE.Mesh &&
-        object.material.transparent &&
-        object.material.opacity < 0.3
-      )
-        continue
-      let shown = true
-      let muscle: MuscleId | null = null
-      let part: HotspotId | undefined
-      for (let node: THREE.Object3D | null = object; node; node = node.parent) {
-        if (!node.visible) {
-          shown = false
-          break
-        }
-        muscle ??= node.userData.muscle ?? null
-        part ??= node.userData.hotspot
-      }
-      if (!shown) continue
-      if (data().editingBody) {
-        if (part) data().onEditPart?.(part)
-        return
-      }
-      pickedMuscle = muscle === data().selectedMuscle ? null : muscle
-      data().onSelectMuscle(pickedMuscle)
-      return
-    }
-    if (!data().editingBody) data().onSelectMuscle(null)
-  }
+  const stopPicking = listenForBodyPart(
+    canvas,
+    camera,
+    () => {
+      if (requested) draw()
+      return body ? [body.root] : []
+    },
+    (zone, point) => {
+      const { frame, anthro, onEditPart } = data()
+      if (Math.abs(point.z) > 0.01) pickedSide = Math.sign(point.z)
+      onEditPart?.(standingPartAt(zone, point, frame, anthro))
+      // Tapping the other limb can change just the highlighted side.
+      if (data().editingBody) invalidate()
+    },
+  )
 
   const resize = new ResizeObserver(() => {
     width = host.clientWidth
@@ -639,10 +588,6 @@ function createStudio(
   intersection.observe(host)
   document.addEventListener('visibilitychange', invalidate)
   canvas.addEventListener('keydown', keyDown)
-  canvas.addEventListener('pointerdown', down, true)
-  canvas.addEventListener('pointermove', move, true)
-  canvas.addEventListener('pointerup', pick, true)
-  canvas.addEventListener('pointercancel', cancelTap)
   controls.addEventListener('change', change)
   controls.addEventListener('start', cancelTurn)
   setView('oblique')
@@ -663,10 +608,7 @@ function createStudio(
       intersection.disconnect()
       document.removeEventListener('visibilitychange', invalidate)
       canvas.removeEventListener('keydown', keyDown)
-      canvas.removeEventListener('pointerdown', down, true)
-      canvas.removeEventListener('pointermove', move, true)
-      canvas.removeEventListener('pointerup', pick, true)
-      canvas.removeEventListener('pointercancel', cancelTap)
+      stopPicking()
       controls.removeEventListener('change', change)
       controls.removeEventListener('start', cancelTurn)
       controls.dispose()
@@ -815,8 +757,9 @@ export function AnatomyViewer(props: Props) {
       )}
       <div className="anatomy-surface" ref={host} />
       <span id={hint} className="anatomy-sr">
-        {touchCameraHint} Con el teclado, usá las flechas para girar, más y menos para el zoom e
-        Inicio para restablecer la cámara. También podés elegir un grupo en la ficha muscular.
+        Tocá una parte del cuerpo para ajustarla. {touchCameraHint} Con el teclado, usá las flechas
+        para girar, más y menos para el zoom e Inicio para restablecer la cámara. También podés
+        elegir un grupo en la ficha muscular.
       </span>
       {!ready && (
         <p className="anatomy-loading" role="status">

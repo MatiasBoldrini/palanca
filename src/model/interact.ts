@@ -7,7 +7,9 @@
  * the model for a posture it would have to fake.
  */
 
-import type { Anthropometry } from './anthropometry'
+import { heightFromSegments, type Anthropometry } from './anthropometry'
+import { getStance, stanceWidthRange, TOE_OUT_RANGE } from './stance'
+import { SQUAT_ELBOW_TURN } from './posture'
 import { type Vec2, clamp } from './geometry'
 import {
   type Coordination,
@@ -46,6 +48,9 @@ export interface Hotspot {
 }
 
 export type ParamId =
+  | 'toeOutDeg'
+  | 'stanceWidth'
+  | 'squatElbowAngle'
   | 'progress'
   | 'load'
   | 'cop'
@@ -179,15 +184,11 @@ export function editableHotspotsFor(exercise: ExerciseId, frame: Frame): Hotspot
   return spots
 }
 
-export function bodyParamsFor(part: HotspotId, exercise: ExerciseId): ParamId[] {
-  if (part === 'bar') return ['load', ...paramsFor(part, exercise)]
-  if (part === 'foot') return ['foot']
-  if (part === 'hip' && exercise === 'deadlift') return ['progress']
-  return paramsFor(part, exercise)
-}
-
 /** Outer bounds, before the solver gets a say. */
 export const PARAM_LIMITS: Record<ParamId, Range> = {
+  toeOutDeg: TOE_OUT_RANGE,
+  squatElbowAngle: SQUAT_ELBOW_TURN,
+  stanceWidth: { min: 0, max: 1.5 }, // Tightened to the available leg lengths below.
   progress: { min: 0, max: 1 },
   load: { min: 20, max: 400 },
   cop: { min: -0.06, max: 0.06 },
@@ -209,6 +210,12 @@ export const PARAM_LIMITS: Record<ParamId, Range> = {
 
 export function paramValue(id: ParamId, setup: Setup): number {
   switch (id) {
+    case 'stanceWidth':
+      return getStance(setup.exercise, setup.anthro, setup.coordination).width
+    case 'toeOutDeg':
+      return getStance(setup.exercise, setup.anthro, setup.coordination).toeOut
+    case 'squatElbowAngle':
+      return setup.coordination.squatElbowAngle ?? 0
     case 'progress':
       return setup.task.progress
     case 'load':
@@ -240,6 +247,10 @@ export function paramValue(id: ParamId, setup: Setup): number {
  */
 export function patchFor(id: ParamId, value: number): SetupPatch {
   switch (id) {
+    case 'stanceWidth':
+    case 'toeOutDeg':
+    case 'squatElbowAngle':
+      return { coordination: { [id]: value } }
     case 'progress':
       return { task: { progress: value } }
     case 'load':
@@ -265,10 +276,12 @@ export function patchFor(id: ParamId, value: number): SetupPatch {
   }
 }
 
-function withPatch(setup: Setup, patch: SetupPatch): Setup {
+export function withSetupPatch(setup: Setup, patch: SetupPatch): Setup {
+  const anthro = patch.anthro ? { ...setup.anthro, ...patch.anthro } : setup.anthro
+  if (patch.anthro) anthro.height = heightFromSegments(anthro)
   return {
     ...setup,
-    anthro: patch.anthro ? { ...setup.anthro, ...patch.anthro } : setup.anthro,
+    anthro,
     task: patch.task ? { ...setup.task, ...patch.task } : setup.task,
     coordination: patch.coordination
       ? { ...setup.coordination, ...patch.coordination }
@@ -277,7 +290,7 @@ function withPatch(setup: Setup, patch: SetupPatch): Setup {
 }
 
 function poseExists(setup: Setup, id: ParamId, value: number): boolean {
-  const s = withPatch(setup, patchFor(id, value))
+  const s = withSetupPatch(setup, patchFor(id, value))
   return solveFrame(s.exercise, s.anthro, s.task, s.coordination).feasible
 }
 
@@ -288,6 +301,7 @@ function poseExists(setup: Setup, id: ParamId, value: number): boolean {
  * of the bar-position control where the solver silently clamps.
  */
 function outerBounds(id: ParamId, setup: Setup): Range {
+  if (id === 'stanceWidth') return stanceWidthRange(setup.exercise, setup.anthro, setup.coordination.deadliftStyle)
   const base = PARAM_LIMITS[id]
   if (id !== 'barPosition' || setup.exercise !== 'deadlift') return base
   const shin = deadliftBarLimit(setup.anthro, setup.task, setup.coordination)

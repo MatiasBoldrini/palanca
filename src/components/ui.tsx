@@ -30,7 +30,7 @@ export function Slider({
 }: SliderProps) {
   const generatedId = useId()
   const id = providedId ?? generatedId
-  const pct = ((value - min) / (max - min)) * 100
+  const pct = max > min ? ((value - min) / (max - min)) * 100 : 0
   return (
     <div className="slider">
       <div className="slider-head">
@@ -42,6 +42,8 @@ export function Slider({
       <input
         id={id}
         type="range"
+        aria-valuetext={format?.(value)}
+        disabled={max <= min}
         min={min}
         max={max}
         step={step}

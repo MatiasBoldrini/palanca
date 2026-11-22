@@ -53,7 +53,7 @@ export function benchContactForces(frame: BenchFrame) {
     ...feet,
     id: i === 0 ? ('foot-positive' as const) : ('foot-negative' as const),
     label: 'Suelo sobre el pie',
-    anchor: { ...feet.anchor, z: leg.ankle.z },
+    anchor: { ...feet.anchor, z: (leg.heel.z + leg.toe.z) / 2 },
     verticalN: feet.verticalN / 2,
   }))
   return [...hands, body, bench, ...footContacts]

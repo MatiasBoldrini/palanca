@@ -17,6 +17,9 @@ const fromMidfoot = (v: number) =>
   v === 0 ? 'mediopié' : `${v > 0 ? '+' : '−'}${Math.abs(v)} cm`
 
 export const PARAM_UI: Record<ParamId, ParamUi> = {
+  toeOutDeg: { label: 'Giro de los pies', scale: 1, step: 1, format: (v) => `${v}°` },
+  squatElbowAngle: { label: 'Giro de los codos', scale: 1, step: 1, format: (v) => `${v}°` },
+  stanceWidth: { label: 'Separación entre los pies', scale: 100, step: 1, format: cm },
   progress: { label: 'Altura en el recorrido', scale: 100, step: 1, format: (v) => `${v}%` },
   load: { label: 'Carga', scale: 1, step: 2.5, format: (v) => `${v} kg` },
   barPosition: { label: 'Respecto al mediopié', scale: 100, step: 0.5, format: fromMidfoot },

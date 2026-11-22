@@ -10,9 +10,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   OrthographicCamera,
-  Raycaster,
-  Vector2,
-  type Object3D,
   Scene,
   Vector3,
   type WebGLRenderer,
@@ -21,6 +18,8 @@ import { ViewerCameraControls } from './viewerCameraControls'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { createAnatomicalBody, type AnatomyLayer } from './body'
 import { createBodyPartDrawing } from './bodyPartDrawing'
+import { listenForBodyPart } from './bodyPartPicking'
+import { benchPointDistance } from '../model/bench'
 import { benchBodyTargets } from '../model/benchBodyParts'
 import type { BenchPartId } from '../model/bodyEditing'
 import { createBenchRig } from './benchRig'
@@ -52,7 +51,15 @@ function createFurniture() {
   seat.position.set(-0.27, -0.039, 0)
   bench.add(seat)
   const box = new BoxGeometry(1, 1, 1)
-  function member(x: number, y: number, z: number, dx: number, dy: number, dz: number, mat = steel) {
+  function member(
+    x: number,
+    y: number,
+    z: number,
+    dx: number,
+    dy: number,
+    dz: number,
+    mat = steel,
+  ) {
     const mesh = new Mesh(box, mat)
     mesh.position.set(x, y, z)
     mesh.scale.set(dx, dy, dz)
@@ -115,13 +122,14 @@ export function createBenchStudio(
   let view: BenchView | 'free' = 'oblique'
   let lastFrame: Props['frame'] | undefined
   let lastLayer: AnatomyLayer | undefined
+  let pickedSide: 0 | 1 | undefined
+  let wasEditing = false
   let closed = false,
     fitting = false,
     width = 0,
     height = 0
   const worldUp = new Vector3(0, 1, 0)
-  const ray = new Raycaster()
-  const editDrawing = createBodyPartDrawing<BenchPartId>(host, (id) => data().onEditPart?.(id))
+  const editDrawing = createBodyPartDrawing<BenchPartId>(host)
   function fit() {
     const { frame, analyzing = true, editingBody } = data()
     if (!width || !height) return
@@ -132,15 +140,25 @@ export function createBenchStudio(
     function point(x: number, y: number, z: number) {
       points.push(new Vector3(x, y, z))
     }
-    const arm = frame.arms[0]
-    const armLength = frame.segments.arm
-    for (const side of [-1, 1]) {
-      for (const x of [frame.pose.legs[0].toe.x, frame.pose.head.x * 1.55]) {
-        for (const y of [0, frame.pose.head.y + 0.12]) point(x, y, side * 0.26)
+    const shoulder = frame.arms[0].shoulder
+    const headEnd = shoulder.x + 1.55 * (frame.pose.head.x - shoulder.x)
+    const lockoutHeight = shoulder.y + frame.segments.arm
+    // Fit the entire repetition once per setup. Include the turned feet and the
+    // fixed bench so both remain visible when the lifter changes position.
+    for (const leg of frame.pose.legs) {
+      for (const landmark of [leg.toe, leg.heel, leg.knee, leg.hip]) {
+        point(landmark.x, landmark.y, landmark.z)
       }
-      const top = arm.shoulder.y + armLength
-      for (const x of [-0.33, 0.23])
-        for (const y of [frame.benchHeight + 0.03, top + 0.24]) point(x, y, side * 0.9)
+    }
+    for (const side of [-1, 1]) {
+      point(headEnd, frame.pose.head.y + 0.12, side * 0.1)
+      for (const x of [-0.95, 0.41]) {
+        point(x, frame.benchHeight, side * 0.16)
+        point(x, 0, side * 0.26)
+      }
+      for (const x of [frame.barRangeX.min - 0.225, frame.barRangeX.max + 0.225]) {
+        for (const y of [frame.benchHeight + 0.03, lockoutHeight + 0.225]) point(x, y, side * 0.9)
+      }
     }
     let left = Infinity,
       rightEdge = -Infinity,
@@ -162,7 +180,9 @@ export function createBenchStudio(
     camera.bottom = -halfHeight
     camera.right = (halfHeight * width) / height
     camera.left = -camera.right
-    const centre = right.multiplyScalar((left + rightEdge) / 2).addScaledVector(up, (top + bottom) / 2)
+    const centre = right
+      .multiplyScalar((left + rightEdge) / 2)
+      .addScaledVector(up, (top + bottom) / 2)
     controls.target.copy(centre)
     camera.position.copy(centre).addScaledVector(direction, 5)
     camera.lookAt(centre)
@@ -179,9 +199,17 @@ export function createBenchStudio(
       lastLayer = next.layer
     }
     renderer.render(scene, camera)
+    if (wasEditing && !next.editingBody) pickedSide = undefined
+    wasEditing = !!next.editingBody
     if (body && next.editingBody) {
-      const side = camera.getWorldDirection(new Vector3()).z <= 0 ? 0 : 1
-      editDrawing.draw(camera, width, height, benchBodyTargets(next.frame, side), next.editPart ?? null)
+      const side = pickedSide ?? (camera.getWorldDirection(new Vector3()).z <= 0 ? 0 : 1)
+      editDrawing.draw(
+        camera,
+        width,
+        height,
+        benchBodyTargets(next.frame, side),
+        next.editPart ?? null,
+      )
     } else {
       editDrawing.hide()
     }
@@ -232,7 +260,8 @@ export function createBenchStudio(
     else if (e.key === '+' || e.key === '=') zoom(1.22)
     else if (e.key === '-') zoom(1 / 1.22)
     else if (e.key.startsWith('Arrow')) {
-      const yaw = controls.getAzimuthalAngle() + ({ ArrowLeft: -0.16, ArrowRight: 0.16 }[e.key] ?? 0)
+      const yaw =
+        controls.getAzimuthalAngle() + ({ ArrowLeft: -0.16, ArrowRight: 0.16 }[e.key] ?? 0)
       const phi = MathUtils.clamp(
         controls.getPolarAngle() + ({ ArrowUp: -0.13, ArrowDown: 0.13 }[e.key] ?? 0),
         controls.minPolarAngle,
@@ -243,71 +272,42 @@ export function createBenchStudio(
     } else return
     e.preventDefault()
   }
-  // OrbitControls retains pointer capture during drag. Only an unbroken
-  // primary tap can edit the rendered mesh.
-  let tap: { id: number; x: number; y: number } | null = null
-  const canvas = renderer.domElement
-  function down(e: PointerEvent) {
-    tap =
-      e.isPrimary && e.button === 0 && data().editingBody
-        ? { id: e.pointerId, x: e.clientX, y: e.clientY }
-        : null
-  }
-  function move(e: PointerEvent) {
-    if (tap && Math.hypot(tap.x - e.clientX, tap.y - e.clientY) > 5) tap = null
-  }
-  function cancelTap() {
-    tap = null
-  }
-  function pick(e: PointerEvent) {
-    move(e)
-    if (tap?.id !== e.pointerId || !body || !data().editingBody) return
-    tap = null
-    const bounds = canvas.getBoundingClientRect()
-    ray.setFromCamera(
-      new Vector2(
-        ((e.clientX - bounds.left) * 2) / bounds.width - 1,
-        1 - ((e.clientY - bounds.top) * 2) / bounds.height,
-      ),
-      camera,
-    )
-    const frame = data().frame
-    const handReach = frame.segments.arm * 0.1
-    const regions: Record<string, BenchPartId> = {
-      foot: 'foot',
-      shank: 'shank',
-      knee: 'thigh',
-      thigh: 'thigh',
-      hip: 'torso',
-      spine: 'torso',
-      arm: 'arm',
-    }
-    for (const hit of ray.intersectObjects([body.root, furniture.bench], true)) {
-      let visible = true,
-        barbell = false
-      for (let node: Object3D | null = hit.object; node; node = node.parent) {
-        visible &&= node.visible
-        barbell ||= node === body.barbell.root
+  const stopPicking = listenForBodyPart(
+    renderer.domElement,
+    camera,
+    () => (body ? [body.root, furniture.bench] : []),
+    (zone, point) => {
+      const { frame, onEditPart } = data()
+      let part: BenchPartId
+      switch (zone) {
+        case 'bar':
+        case 'arm':
+          part = frame.arms.some(
+            (arm) => benchPointDistance(arm.grip, point) < frame.segments.arm * 0.1,
+          )
+            ? 'grip'
+            : zone
+          break
+        case 'hip':
+        case 'spine':
+          part = 'torso'
+          break
+        case 'knee':
+          part = 'thigh'
+          break
+        case 'foot':
+        case 'shank':
+        case 'thigh':
+          part = zone
+          break
+        default:
+          return
       }
-      if (!visible) continue
-      const zone = regions[hit.object.userData.hotspot]
-      if (barbell || zone === 'arm') {
-        const atHand = frame.arms.some(
-          (arm) =>
-            hit.point.distanceToSquared(new Vector3(arm.grip.x, arm.grip.y, arm.grip.z)) <
-            handReach * handReach,
-        )
-        data().onEditPart?.(atHand ? 'grip' : barbell ? 'bar' : 'arm')
-      } else if (zone) {
-        data().onEditPart?.(zone)
-      }
-      break
-    }
-  }
-  canvas.addEventListener('pointerdown', down)
-  canvas.addEventListener('pointermove', move)
-  canvas.addEventListener('pointerup', pick)
-  canvas.addEventListener('pointercancel', cancelTap)
+      if (Math.abs(point.z) > 0.01) pickedSide = point.z > 0 ? 0 : 1
+      onEditPart?.(part)
+      if (data().editingBody && data().editPart === part) draw()
+    },
+  )
   setView('oblique')
   const measure = () => {
     width = host.clientWidth
@@ -340,10 +340,7 @@ export function createBenchStudio(
       controls.removeEventListener('change', change)
       controls.dispose()
       editDrawing.dispose()
-      canvas.removeEventListener('pointerdown', down)
-      canvas.removeEventListener('pointermove', move)
-      canvas.removeEventListener('pointerup', pick)
-      canvas.removeEventListener('pointercancel', cancelTap)
+      stopPicking()
       renderer.domElement.removeEventListener('keydown', keyboard)
       body?.dispose()
       furniture.dispose()

@@ -42,8 +42,14 @@ export function ViewerToolbar({
   return (
     <div ref={action} className="viewer-toolbox">
       {editingBody ? (
-        <button className="body-edit-done" type="button" onClick={toggleEditor}>
-          <Check size={16} aria-hidden /> Terminar ajuste
+        <button
+          className="body-edit-done"
+          type="button"
+          aria-label="Terminar ajuste"
+          onClick={toggleEditor}
+        >
+          <Check size={16} aria-hidden /> <span className="edit-done-full">Terminar ajuste</span>
+          <span className="edit-done-short">Listo</span>
         </button>
       ) : (
         <ControlDisclosure

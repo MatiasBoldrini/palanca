@@ -1,3 +1,4 @@
+import { bendArm } from './armGeometry'
 import { type Anthropometry, GRAVITY, ankleHeight } from './anthropometry'
 import {
   type Vec2,
@@ -25,6 +26,7 @@ import {
   jointAngles,
   placeTrunk,
   squatElbow,
+  SQUAT_ELBOW_TURN,
 } from './posture'
 
 import { getStance, type DeadliftStyle, type Stance } from './stance'
@@ -34,6 +36,10 @@ export type ExerciseId = 'deadlift' | 'squat'
 export interface Coordination {
   /** Distance between the centres of the two feet, in metres. */
   stanceWidth?: number
+  /** Manual outward foot angle, in degrees. Omission follows the stance preset. */
+  toeOutDeg?: number
+  /** Rotation of the squat elbow around the shoulder–grip axis from neutral, in degrees. */
+  squatElbowAngle?: number
   deadliftStyle?: DeadliftStyle
   /**
    * 0 = hip dominant with vertical shins, 1 = knees travel forward.
@@ -238,6 +244,7 @@ function assemble(
     elbow: Vec2
     bar: Vec2
   },
+  upperArmFraction?: number,
 ): { posture: Posture; massPoints: MassPoint[] } {
   const posture: Posture = {
     heel: parts.heel,
@@ -256,7 +263,7 @@ function assemble(
     headTop: parts.trunk.headTop,
     bar: parts.bar,
   }
-  return { posture, massPoints: bodyMassPoints(posture, a) }
+  return { posture, massPoints: bodyMassPoints(posture, a, upperArmFraction) }
 }
 
 /** Half a 28 mm bar plus the soft tissue over the tibia. */
@@ -453,17 +460,25 @@ export function solveSquat(body: Anthropometry, task: Task, coord: Coordination)
       sub(trunk.shoulder, scale(along, coord.barOffset)),
       scale(posterior, a.torso * 0.09),
     )
-    return assemble(a, {
-      ankle,
-      heel,
-      toe,
-      knee,
-      hip,
-      trunk,
-      hand: bar,
-      elbow: squatElbow(trunk.shoulder, hip, a),
-      bar,
-    })
+    const neutral = squatElbow(trunk.shoulder, hip, a)
+    const upperArmFraction = 0.52
+    const upperArm = a.arm * upperArmFraction
+    const { elbow } = bendArm(
+      { ...trunk.shoulder, z: stance.shoulderHalf },
+      { ...bar, z: stance.gripHalf },
+      {
+        x: neutral.x - trunk.shoulder.x,
+        y: neutral.y - trunk.shoulder.y,
+        z: stance.elbowHalf - stance.shoulderHalf,
+      },
+      upperArm,
+      a.arm - upperArm,
+      rad(clamp(coord.squatElbowAngle ?? 0, SQUAT_ELBOW_TURN.min, SQUAT_ELBOW_TURN.max)),
+    )
+    return {
+      ...assemble(a, { ankle, heel, toe, knee, hip, trunk, hand: bar, elbow, bar }, upperArmFraction),
+      elbowHalf: elbow.z,
+    }
   }
 
   const imbalance = (chordAngle: number) => {
@@ -476,7 +491,7 @@ export function solveSquat(body: Anthropometry, task: Task, coord: Coordination)
 
   const search = findRoot(imbalance, rad(12), rad(100))
   const chordAngle = clamp(search.value, rad(8), rad(104))
-  const { posture, massPoints } = build(chordAngle)
+  const { posture, massPoints, elbowHalf } = build(chordAngle)
   // The squat bar rides on the back, so the arms hold nothing.
   const kinetics = computeKinetics(posture, massPoints, task.load, a.mass, {
     armsCarryLoad: false,
@@ -494,7 +509,7 @@ export function solveSquat(body: Anthropometry, task: Task, coord: Coordination)
   }
 
   return {
-    stance,
+    stance: { ...stance, elbowHalf },
     posture,
     angles,
     kinetics,

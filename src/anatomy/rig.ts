@@ -66,27 +66,12 @@ const sides = [limbLinks(1), limbLinks(-1)]
 export { axial as restSpine, sides as restLimbs }
 
 /** Three-dimensional landmarks used to pose and select the same arm. */
-export function armLandmarks(frame: Frame, a: Anthropometry, exercise: ExerciseId, side: number) {
+export function armLandmarks(frame: Frame, side: number) {
   const p = frame.posture
   const stance = frame.stance
-  const squat = exercise === 'squat'
   const shoulder = world(p.shoulder, side * stance.shoulderHalf)
   const elbow = world(p.elbow, side * stance.elbowHalf)
   const grip = world(p.hand, side * stance.gripHalf)
-  if (squat) {
-    // The solver gives a sagittal elbow direction. Lift it into the plane
-    // of the wide grip and close the shoulder–elbow–grip chain in 3D.
-    const axis = grip.clone().sub(shoulder)
-    const distance = Math.max(0.001, axis.length())
-    axis.divideScalar(distance)
-    const upper = a.arm * 0.52,
-      lower = a.arm - upper
-    const along = (upper * upper - lower * lower + distance * distance) / (2 * distance)
-    const radius = Math.sqrt(Math.max(0, upper * upper - along * along))
-    const direction = elbow.clone().sub(shoulder)
-    direction.addScaledVector(axis, -direction.dot(axis)).normalize()
-    elbow.copy(shoulder).addScaledVector(axis, along).addScaledVector(direction, radius)
-  }
   return { shoulder, elbow, grip }
 }
 
@@ -109,7 +94,7 @@ export function createRig(bones: Bone[]) {
     basis.scale(v(width, from.distanceTo(to) / ref.length, width))
     apply(ref.name, basis.multiply(ref.inverseRest))
   }
-  return (frame: Frame, a: Anthropometry, exercise: ExerciseId) => {
+  return (frame: Frame, a: Anthropometry, _exercise: ExerciseId) => {
     const { posture: p, stance } = frame
     const scale = a.height / 1.71
     const chain = [
@@ -126,7 +111,7 @@ export function createRig(bones: Bone[]) {
       const ankle = world(p.ankle, -ref.mirror * jointLateralOffset('ankle', stance))
       const knee = world(p.knee, -ref.mirror * jointLateralOffset('knee', stance))
       const hip = world(p.hip, -ref.mirror * jointLateralOffset('hip', stance))
-      const { shoulder, elbow, grip } = armLandmarks(frame, a, exercise, -ref.mirror)
+      const { shoulder, elbow, grip } = armLandmarks(frame, -ref.mirror)
       // A closed hand rotates around the bar's transverse axis. The wrist stays
       // on the elbow side of the shaft for both the pull and the squat grip.
       const towardElbow = v(elbow.x - grip.x, elbow.y - grip.y, 0).normalize()

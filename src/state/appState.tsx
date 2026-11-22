@@ -13,14 +13,20 @@ import {
   anthropometryFromHeight,
   heightFromSegments,
 } from '../model/anthropometry'
-import { nearestFeasibleProgress, type SetupPatch } from '../model/interact'
+import { nearestFeasibleProgress, PARAM_LIMITS, type SetupPatch } from '../model/interact'
 import { type Coordination, DEFAULT_TASK, type ExerciseId, type Task } from '../model/lift'
 import type { MechanicsView } from '../model/mechanicsOverlay'
-import { BENCH_GRIP, type BenchJointId } from '../model/bench'
+import {
+  BENCH_GRIP,
+  DEFAULT_BENCH_POSE,
+  readBenchPose,
+  type BenchPoseSettings,
+  type BenchJointId,
+} from '../model/bench'
 import { DEADLIFT_PRESETS, SQUAT_PRESETS } from './presets'
 
 export type LiftId = ExerciseId | 'bench'
-interface BenchSettings {
+interface BenchSettings extends BenchPoseSettings {
   progress: number
   gripRatio: number
   joint: BenchJointId | 'all'
@@ -45,7 +51,7 @@ export interface AppState {
 const initialState: AppState = {
   analyzing: false,
   benchActive: false,
-  bench: { progress: 1, gripRatio: 1.5, joint: 'shoulder' },
+  bench: { ...DEFAULT_BENCH_POSE, progress: 1, gripRatio: 1.5, joint: 'shoulder' },
   mechanics: {
     focus: 'all',
     forces: true,
@@ -169,7 +175,9 @@ function reduceState(state: AppState, action: Action): AppState {
       return {
         ...state,
         bench: { ...state.bench, ...action.patch },
-        playing: state.playing && action.patch.gripRatio === undefined,
+        playing:
+          state.playing &&
+          Object.keys(action.patch).every((key) => key === 'progress' || key === 'joint'),
       }
     case 'setPlaying':
       return { ...state, playing: action.playing }
@@ -221,7 +229,11 @@ function encode(state: AppState): string {
       deadlift: state.coordination.deadlift.stanceWidth,
       squat: state.coordination.squat.stanceWidth,
       style: state.coordination.deadlift.deadliftStyle,
+      deadliftToeOut: state.coordination.deadlift.toeOutDeg,
+      squatToeOut: state.coordination.squat.toeOutDeg,
+      squatElbowAngle: state.coordination.squat.squatElbowAngle,
     },
+    benchPose: readBenchPose(state.bench),
     b: [round(state.bench.progress), round(state.bench.gripRatio), state.bench.joint],
     m: state.mechanics,
     analysis: state.analyzing,
@@ -268,12 +280,21 @@ function decode(hash: string, legacySharedView = false): Partial<AppState> | nul
     const savedStance = p.stance ?? {}
     const savedWidth = (value: unknown) =>
       typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+    const savedAngle = (key: 'toeOutDeg' | 'squatElbowAngle', value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value)
+        ? Math.max(PARAM_LIMITS[key].min, Math.min(PARAM_LIMITS[key].max, value))
+        : undefined
     const stanceByExercise = {
       deadlift: {
         stanceWidth: savedWidth(savedStance.deadlift),
+        toeOutDeg: savedAngle('toeOutDeg', savedStance.deadliftToeOut),
         deadliftStyle: savedStance.style === 'sumo' ? ('sumo' as const) : ('conventional' as const),
       },
-      squat: { stanceWidth: savedWidth(savedStance.squat) },
+      squat: {
+        stanceWidth: savedWidth(savedStance.squat),
+        toeOutDeg: savedAngle('toeOutDeg', savedStance.squatToeOut),
+        squatElbowAngle: savedAngle('squatElbowAngle', savedStance.squatElbowAngle),
+      },
     }
     const mechanics = p.m ?? {}
     const bench = Array.isArray(p.b) ? p.b : []
@@ -281,6 +302,7 @@ function decode(hash: string, legacySharedView = false): Partial<AppState> | nul
       analyzing: typeof p.analysis === 'boolean' ? p.analysis : legacySharedView,
       benchActive: p.e === 2,
       bench: {
+        ...readBenchPose(p.benchPose),
         progress: Number.isFinite(bench[0])
           ? Math.max(0, Math.min(1, bench[0]))
           : initialState.bench.progress,

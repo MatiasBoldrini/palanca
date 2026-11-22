@@ -2,6 +2,8 @@ import type { Anthropometry } from './anthropometry'
 import { clamp, lerp, rad } from './geometry'
 import type { Coordination, ExerciseId } from './lift'
 
+export const TOE_OUT_RANGE = { min: 0, max: 45 } as const
+
 export type DeadliftStyle = 'conventional' | 'sumo'
 
 /** Positive transverse distances refer to one side of the sagittal midline.
@@ -67,12 +69,14 @@ export function getStance(
   const asked = coord.stanceWidth
   const width = clamp(asked !== undefined && Number.isFinite(asked) ? asked : nominal, min, max)
   const fraction = (width - min) / (max - min)
-  const toeOut =
+  const presetToeOut =
     exercise === 'squat'
       ? lerp(8, 34, fraction)
       : sumo
         ? lerp(24, 42, fraction)
         : lerp(5, 18, fraction)
+  const toeOut = typeof coord.toeOutDeg === 'number' && Number.isFinite(coord.toeOutDeg)
+    ? clamp(coord.toeOutDeg, TOE_OUT_RANGE.min, TOE_OUT_RANGE.max) : presetToeOut
   const toeOutRad = rad(toeOut)
   const s = a.height / 1.71
   const hipHalf = 0.08 * s

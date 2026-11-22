@@ -40,8 +40,14 @@ export function BenchViewer(props: Props) {
     const resized = (Object.keys(after) as (keyof typeof after)[]).some(
       (key) => before[key] !== after[key],
     )
+    const foot = props.frame.pose.legs[0].toe
+    const previousFoot = previous.frame.pose.legs[0].toe
     if (
       resized ||
+      foot.x !== previousFoot.x ||
+      foot.z !== previousFoot.z ||
+      props.frame.barRangeX.min !== previous.frame.barRangeX.min ||
+      props.frame.barRangeX.max !== previous.frame.barRangeX.max ||
       previous.analyzing !== props.analyzing ||
       previous.editingBody !== props.editingBody
     )
@@ -69,7 +75,7 @@ export function BenchViewer(props: Props) {
         canvas.setAttribute('role', 'img')
         canvas.setAttribute(
           'aria-label',
-          'Press de banca en tres dimensiones. Usá las flechas para girar, más y menos para acercar o alejar, e Inicio para restablecer la cámara.',
+          'Press de banca en tres dimensiones. Tocá una parte del cuerpo para ajustarla. Usá las flechas para girar, más y menos para acercar o alejar, e Inicio para restablecer la cámara.',
         )
         canvas.addEventListener('webglcontextlost', fail)
         el.appendChild(canvas)

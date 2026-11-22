@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { anthropometryFromHeight, heightFromSegments } from './anthropometry'
 import {
   benchPointDistance as distance,
+  BENCH_POSE_LIMITS,
+  DEFAULT_BENCH_POSE,
+  benchElbowFlexion,
+  benchKneeFlexion,
+  footSlideAtKneeAngle,
+  progressAtElbowFlexion,
+  type BenchPoseSettings,
   buildBenchFrame,
   type BenchFrame,
   type BenchSegments,
@@ -88,6 +95,79 @@ describe('bench press with editable anatomical lengths', () => {
           expect(torque).toBeCloseTo(0, 8)
         }
       }
+    }
+  })
+})
+
+describe('bench segment rotation and placement', () => {
+  const frameAt = (t: number, patch: Partial<BenchPoseSettings> = {}) =>
+    buildBenchFrame(t, 100, reference.height, reference.mass, 1.5, reference, {
+      ...DEFAULT_BENCH_POSE,
+      ...patch,
+    })
+
+  it('solves the equivalent foot position for a requested knee flexion, on both legs', () => {
+    const neutral = frameAt(0).pose.legs[0]
+    for (const footSlideCm of [-14, -6, 0, 4, 12]) {
+      const leg = frameAt(0.5, { footSlideCm }).pose.legs[0]
+      expect(leg.ankle.x - neutral.ankle.x).toBeCloseTo(footSlideCm / 100, 8)
+      expect(footSlideAtKneeAngle(neutral, benchKneeFlexion(leg))).toBeCloseTo(footSlideCm, 7)
+    }
+  })
+
+  it('sets elbow flexion from lockout and rotates a bent elbow without moving the bar', () => {
+    for (const barShiftCm of [-8, 0, 5]) {
+      const sample = (t: number) => frameAt(t, { barShiftCm })
+      const angles = Array.from({ length: 65 }, (_, i) => benchElbowFlexion(sample(i / 64).arms[0]))
+      for (const target of [0, 15, 45, 90, Math.floor(Math.max(...angles))]) {
+        const progress = progressAtElbowFlexion(target, 1, angles, sample)
+        expect(benchElbowFlexion(sample(progress).arms[0])).toBeCloseTo(target, 2)
+      }
+    }
+    const initial = frameAt(0.35),
+      rotated = frameAt(0.35, { elbowTurnDeg: 20 })
+    expect(rotated.bar).toEqual(initial.bar)
+    expect(distance(initial.arms[0].elbow, rotated.arms[0].elbow)).toBeGreaterThan(0.03)
+    expect(rotated.arms[0].moments.elbow.magnitudeNm).not.toBeCloseTo(
+      initial.arms[0].moments.elbow.magnitudeNm,
+      1,
+    )
+  })
+
+  it('keeps the combined body/bar centre of mass within the support span for all pose limits', () => {
+    const poseKeys = Object.keys(BENCH_POSE_LIMITS) as (keyof BenchPoseSettings)[]
+    let poses = [DEFAULT_BENCH_POSE]
+    for (const key of poseKeys) {
+      const bounds = BENCH_POSE_LIMITS[key]
+      poses = poses.flatMap((p) => [bounds.min, bounds.max].map((v) => ({ ...p, [key]: v })))
+    }
+    for (const shape of [
+      reference,
+      { shank: 0.3, thigh: 0.3, torso: 0.35, arm: 0.8, foot: 0.18 },
+      { shank: 0.6, thigh: 0.6, torso: 0.65, arm: 0.45, foot: 0.35 },
+      { shank: 0.3, thigh: 0.6, torso: 0.65, arm: 0.45, foot: 0.18 },
+      { shank: 0.6, thigh: 0.3, torso: 0.35, arm: 0.8, foot: 0.35 },
+    ]) {
+      for (const pose of poses)
+        for (const grip of [1, 2])
+          for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+            const f = buildBenchFrame(t, 400, heightFromSegments(shape), 40, grip, shape, pose)
+            const { feetN, benchN, bodyN, barN } = f.forces
+            expect(feetN).toBeGreaterThanOrEqual(0)
+            expect(benchN).toBeGreaterThanOrEqual(0)
+            expect(feetN + benchN + bodyN + barN).toBeCloseTo(0, 8)
+            expect(
+              feetN * f.footSupport.x +
+                benchN * f.benchSupport.x +
+                bodyN * f.bodyCom.x +
+                barN * f.bar.x,
+            ).toBeCloseTo(0, 7)
+            for (const key of names) expect(measured(f, 0)[key]).toBeCloseTo(shape[key], 7)
+            expect(f.pose.legs[0].toe.y).toBe(0)
+            expect(f.pose.legs[0].toe.z).toBeCloseTo(-f.pose.legs[1].toe.z)
+            expect(f.bar.x).toBeGreaterThanOrEqual(f.barRangeX.min - 1e-9)
+            expect(f.bar.x).toBeLessThanOrEqual(f.barRangeX.max + 1e-9)
+          }
     }
   })
 })

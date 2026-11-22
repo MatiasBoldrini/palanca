@@ -110,8 +110,9 @@ export function StanceControls({
                       ? {
                           deadliftStyle: index === 0 ? 'conventional' : 'sumo',
                           stanceWidth: undefined,
+                          toeOutDeg: undefined,
                         }
-                      : { stanceWidth: index === 0 ? undefined : wide },
+                      : { stanceWidth: index === 0 ? undefined : wide, toeOutDeg: undefined },
                   )
                   close()
                 }}
@@ -173,6 +174,7 @@ export function StanceComparison({
       ...coordination,
       deadliftStyle: standard && exercise === 'deadlift' ? 'sumo' : 'conventional',
       stanceWidth: exercise === 'squat' && standard ? wideSquat(anthro) : undefined,
+      toeOutDeg: undefined,
     }
     const bounds = feasibleRange('progress', { exercise, anthro, coordination: other, task })
     const low = solveFrame(exercise, anthro, { ...task, progress: bounds.min }, other)

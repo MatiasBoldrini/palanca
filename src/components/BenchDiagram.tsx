@@ -69,7 +69,7 @@ export function BenchDiagram({
     <div className="bench-diagram">
       <svg
         viewBox="45 12 425 268"
-        role={editingBody ? 'group' : 'img'}
+        role="group"
         aria-label={'Diagrama de banca ' + (front ? 'desde los pies' : 'de perfil')}
       >
         <defs>
@@ -87,9 +87,9 @@ export function BenchDiagram({
         </defs>
         <path d="M55 260H460" stroke="#aca89c" />
         <rect
-          x={front ? 235 : x(f.pose.hip) - 10}
+          x={front ? 235 : 332 - 0.945 * scale}
           y={benchY}
-          width={front ? 50 : x(f.pose.head) - x(f.pose.hip) + 25}
+          width={front ? 50 : 1.35 * scale}
           height="8"
           rx="3"
           fill="#58655f"
@@ -99,11 +99,11 @@ export function BenchDiagram({
             front
               ? 'M245 ' + (benchY + 8) + 'V260M275 ' + (benchY + 8) + 'V260'
               : 'M' +
-                x(f.pose.hip) +
+                (332 - 0.76 * scale) +
                 ' ' +
                 (benchY + 8) +
                 'V260M' +
-                x(f.pose.neck) +
+                (332 + 0.24 * scale) +
                 ' ' +
                 (benchY + 8) +
                 'V260'
@@ -119,7 +119,10 @@ export function BenchDiagram({
           strokeLinejoin="round"
         >
           {f.pose.legs.map((leg, i) => (
-            <polyline key={i} points={proj([leg.hip, leg.knee, leg.ankle, leg.toe])} />
+            <g key={i}>
+              <polyline points={proj([leg.hip, leg.knee, leg.ankle])} />
+              <polyline points={proj([leg.heel, leg.ankle, leg.toe])} strokeWidth="6" />
+            </g>
           ))}
           <polyline points={proj([f.pose.hip, f.pose.chest, f.pose.neck])} strokeWidth="19" />
           <ellipse
@@ -139,29 +142,31 @@ export function BenchDiagram({
             />
           ))}
         </g>
-        <line
-          x1={x(f.bar) - (front ? 124 : 0)}
-          x2={x(f.bar) + (front ? 124 : 0)}
-          y1={y(f.bar)}
-          y2={y(f.bar)}
-          stroke="#4c5553"
-          strokeWidth="5"
-        />
-        {front ? (
-          [-111, 111].map((d) => (
-            <rect
-              key={d}
-              x={x(f.bar) + d - 4}
-              y={y(f.bar) - 20}
-              width="8"
-              height="40"
-              rx="2"
-              fill="#4c5553"
-            />
-          ))
-        ) : (
-          <circle cx={x(f.bar)} cy={y(f.bar)} r="15" fill="#4c5553" opacity=".65" />
-        )}
+        <g className="diagram-edit-target" onClick={() => onEditPart('bar')}>
+          <line
+            x1={x(f.bar) - (front ? 124 : 0)}
+            x2={x(f.bar) + (front ? 124 : 0)}
+            y1={y(f.bar)}
+            y2={y(f.bar)}
+            stroke="#4c5553"
+            strokeWidth="5"
+          />
+          {front ? (
+            [-111, 111].map((d) => (
+              <rect
+                key={d}
+                x={x(f.bar) + d - 4}
+                y={y(f.bar) - 20}
+                width="8"
+                height="40"
+                rx="2"
+                fill="#4c5553"
+              />
+            ))
+          ) : (
+            <circle cx={x(f.bar)} cy={y(f.bar)} r="15" fill="#4c5553" opacity=".65" />
+          )}
+        </g>
         {(editingBody ? editForces : forces) &&
           projected.map(({ force, originX, originY, shaftX, endY }) => {
             const head = Math.min(7.5, Math.abs(originY - endY) * 0.48)
@@ -283,30 +288,65 @@ export function BenchDiagram({
             <line x1={x(arm.grip)} x2={x(arm.grip)} y1={y(arm.grip)} y2={y(arm[joint])} />
           </g>
         )}
-        {editingBody &&
-          benchBodyTargets(f).map((target) => (
-            <g
-              className="diagram-edit-target"
-              key={target.id}
-              role="button"
-              aria-label={'Ajustar ' + target.label}
-              aria-pressed={editPart === target.id}
-              transform={'translate(' + xy(target.point) + ')'}
-              tabIndex={0}
-              onClick={() => onEditPart(target.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  onEditPart(target.id)
-                }
-              }}
-            >
-              <title>{target.label}</title>
-              <circle r="9" fill="transparent" />
-              <circle className="edit-pin" r="4.5" />
-              <path d="M-2 0H2M0 -2V2" fill="none" stroke="#fff" strokeWidth="1" />
+        {benchBodyTargets(f).map((target) => (
+          <g
+            className="diagram-edit-target"
+            key={target.id}
+            role="button"
+            aria-label={'Ajustar ' + target.label}
+            aria-pressed={editingBody && editPart === target.id}
+            tabIndex={0}
+            onClick={() => onEditPart(target.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onEditPart(target.id)
+              }
+            }}
+          >
+            <title>{'Ajustar ' + target.label}</title>
+            {target.id !== 'bar' && target.id !== 'grip' && (
+              <polyline
+                points={proj(target.segment)}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="16"
+              />
+            )}
+            {front && target.id !== 'bar' && target.id !== 'torso' && (
+              <g transform="translate(520 0) scale(-1 1)">
+                {target.id !== 'grip' && (
+                  <polyline
+                    points={proj(target.segment)}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth="16"
+                  />
+                )}
+                <circle cx={x(target.point)} cy={y(target.point)} r="9" fill="transparent" />
+              </g>
+            )}
+            {target.id === 'bar' && !front && (
+              <circle
+                cx={x(f.bar)}
+                cy={y(f.bar)}
+                r="14"
+                fill="none"
+                stroke="transparent"
+                strokeWidth="8"
+              />
+            )}
+            <g transform={'translate(' + xy(target.point) + ')'}>
+              {(target.id !== 'bar' || front || editingBody) && <circle r="9" fill="transparent" />}
+              {editingBody && (
+                <>
+                  <circle className="edit-pin" r="4.5" />
+                  <path d="M-2 0H2M0 -2V2" fill="none" stroke="#fff" strokeWidth="1" />
+                </>
+              )}
             </g>
-          ))}
+          </g>
+        ))}
       </svg>
       <label className="diagram-plane">
         Vista{' '}

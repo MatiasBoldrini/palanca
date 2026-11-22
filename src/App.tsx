@@ -18,8 +18,8 @@ import {
 import { StanceControls, StanceComparison } from './components/StanceStudy'
 import { StudyGuide } from './components/StudyGuide'
 import { ViewerToolbar } from './components/ViewerToolbar'
-import { BodyEditor } from './components/BodyEditor'
-import { Inspector, ParamSlider } from './components/Inspector'
+import { BodyEditor, BodyEditHint } from './components/BodyEditor'
+import { Inspector } from './components/Inspector'
 import { MetricsTable, buildRows } from './components/Metrics'
 import { LabHeader, LabFooter } from './components/LabHeader'
 import { BenchLab } from './components/BenchLab'
@@ -29,7 +29,7 @@ import { ForceBalance, MechanicsControls } from './components/MechanicsControls'
 import { buildMechanicsOverlay, formatBarArm, formatMoment } from './model/mechanicsOverlay'
 import type { JointKey } from './model/kinetics'
 import { MomentPanel } from './components/MomentPanel'
-import { Collapsible } from './components/ui'
+import { Collapsible, Slider } from './components/ui'
 import { usePlayback, useSpringSnapshot } from './hooks/useAnimationEngine'
 import { clamp } from './model/geometry'
 import {
@@ -39,11 +39,11 @@ import {
   feasibleRange,
   hotspotsFor,
   editableHotspotsFor,
-  bodyParamsFor,
   paramValue,
   paramsFor,
   patchFor,
 } from './model/interact'
+import { standingPartControls } from './model/standingPartControls'
 import { formatParam } from './components/params'
 import type { Coordination, Task } from './model/lift'
 import { simulateSeries, solveFrame } from './model/lift'
@@ -155,8 +155,16 @@ function StandingLab() {
       barOffset: anim.barOffset,
       stanceWidth: coordination.stanceWidth,
       deadliftStyle: coordination.deadliftStyle,
+      toeOutDeg: coordination.toeOutDeg,
+      squatElbowAngle: coordination.squatElbowAngle,
     }),
-    [anim, coordination.stanceWidth, coordination.deadliftStyle],
+    [
+      anim,
+      coordination.stanceWidth,
+      coordination.deadliftStyle,
+      coordination.toeOutDeg,
+      coordination.squatElbowAngle,
+    ],
   )
 
   const frame = useMemo(
@@ -241,6 +249,15 @@ function StandingLab() {
     coordination,
   ])
 
+  const bodyControls = useMemo(
+    () => (editingBody ? standingPartControls(editPart, setup) : []),
+    [editingBody, editPart, setup],
+  )
+  const selectBodyPart = (part: HotspotId) => {
+    stopPlayback()
+    setEditPart(part)
+    setEditingBody(true)
+  }
   const setParam = useCallback(
     (id: ParamId, value: number) => {
       if (state.playing) dispatch({ type: 'setPlaying', playing: false })
@@ -342,7 +359,12 @@ function StandingLab() {
 
   return (
     <div className="atlas-app movement-app">
-      <LabHeader onSwitch={() => setSelected(null)} />
+      <LabHeader
+        onSwitch={() => {
+          setSelected(null)
+          setEditingBody(false)
+        }}
+      />
       <main className="atlas-main" aria-labelledby="exercise-title">
         <div
           className="atlas-layout"
@@ -353,6 +375,7 @@ function StandingLab() {
             <section
               className="atlas-card viewer-card"
               aria-label="Simulador del levantamiento"
+              data-editing={editingBody}
               data-force-focus={
                 analyzing && mechanics.forces && !editingBody ? mechanics.focus : 'all'
               }
@@ -411,25 +434,6 @@ function StandingLab() {
                   )}
                 </ViewerToolbar>
               </div>
-              {mode === 'anatomy' && editingBody && (
-                <BodyEditor
-                  editForces={editForces}
-                  onEditForces={setEditForces}
-                  options={editableHotspotsFor(exercise, frame)}
-                  selected={editPart}
-                  onSelect={setEditPart}
-                >
-                  {bodyParamsFor(editPart, exercise).map((id) => (
-                    <ParamSlider
-                      key={id}
-                      id={id}
-                      setup={setup}
-                      accent={ACCENT}
-                      onChange={setParam}
-                    />
-                  ))}
-                </BodyEditor>
-              )}
               {unavailable && (
                 <p className="fallback-note" role="status">
                   El visor 3D no pudo iniciarse. Podés explorar el mismo movimiento en el diagrama o
@@ -437,6 +441,9 @@ function StandingLab() {
                 </p>
               )}
               <div className={`atlas-viewport ${mode}`} id="lift-viewport" tabIndex={-1}>
+                {mode === 'anatomy' &&
+                  !editingBody &&
+                  !(analyzing && muscle && layer === 'muscles') && <BodyEditHint />}
                 {analyzing &&
                   !editingBody &&
                   mode === 'anatomy' &&
@@ -478,7 +485,7 @@ function StandingLab() {
                         editingBody={editingBody}
                         editForces={editForces}
                         editJoint={editPart}
-                        onEditPart={setEditPart}
+                        onEditPart={selectBodyPart}
                         mechanics={mechanics}
                         peakMoment={peakMoment}
                         onSelectJoint={(joint) => {
@@ -486,10 +493,6 @@ function StandingLab() {
                           setGuide('momentos')
                         }}
                         selectedMuscle={analyzing ? muscle : null}
-                        onSelectMuscle={(group) => {
-                          setMuscle(group)
-                          if (group && analyzing) setGuide('musculos')
-                        }}
                         onUnavailable={useDiagramFallback}
                       />
                     </Suspense>
@@ -524,6 +527,42 @@ function StandingLab() {
                   />
                 )}
               </div>
+              {editingBody && mode === 'anatomy' && (
+                <BodyEditor
+                  options={editableHotspotsFor(exercise, frame)}
+                  selected={editPart}
+                  onSelect={setEditPart}
+                  editForces={editForces}
+                  onEditForces={setEditForces}
+                  adjustments={bodyControls.map((control) => ({
+                    id: control.id,
+                    kind: control.kind,
+                    label: control.label,
+                    control:
+                      control.max > control.min ? (
+                        <Slider
+                          label={control.label}
+                          min={control.min}
+                          max={control.max}
+                          step={control.step}
+                          value={control.value}
+                          format={(value) =>
+                            value.toLocaleString('es-AR', { maximumFractionDigits: 1 }) +
+                            (control.unit === '°' || control.unit === '%' ? '' : ' ') +
+                            control.unit
+                          }
+                          onChange={(value) =>
+                            dispatch({ type: 'setParams', patch: control.patch(value) })
+                          }
+                        />
+                      ) : (
+                        <p className="param-locked">
+                          {control.label} · Alcanzaste el límite de esta postura.
+                        </p>
+                      ),
+                  }))}
+                />
+              )}
               <LiftTransport
                 marker={exercise === 'deadlift' ? 'Barra' : 'Cadera'}
                 height={exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y}
@@ -544,13 +583,12 @@ function StandingLab() {
                   setProgress(value)
                 }}
               />
-              <AnalysisToggle
-                active={analyzing}
-                onChange={(value) => {
-                  setEditingBody(false)
-                  dispatch({ type: 'setAnalyzing', value })
-                }}
-              />
+              {!editingBody && (
+                <AnalysisToggle
+                  active={analyzing}
+                  onChange={(value) => dispatch({ type: 'setAnalyzing', value })}
+                />
+              )}
               {analyzing && !editingBody && (
                 <>
                   <p className="pose-explanation">
