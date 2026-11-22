@@ -64,7 +64,7 @@ export function PatternPanel({ accent }: { accent: string }) {
           accent={accent}
           format={deg}
           onChange={(v) => dispatch({ type: 'setCoordination', patch: { spineFlexion: v } })}
-          hint="0° es la curva natural: lordosis lumbar y cifosis dorsal. Los grados se suman sobre eso — primero se va la lordosis, después redondea la espalda alta."
+          hint="0° es la referencia neutra del modelo. Al aumentar la flexión, la curva crece primero en la zona lumbar y luego en la espalda alta."
         />
         {state.exercise === 'deadlift' && (
           <Slider
@@ -206,15 +206,15 @@ export function TaskPanel() {
     <Section title="Tarea">
       <Slider
         label="Carga en la barra"
-        value={Math.round(task.load)}
+        value={task.load}
         min={20}
         max={400}
         step={2.5}
-        format={(v) => `${v} kg`}
+        format={(v) => `${v.toLocaleString('es-AR')} kg`}
         onChange={(v) => dispatch({ type: 'setTask', patch: { load: v } })}
       />
       <p className="caption" style={{ marginTop: 4 }}>
-        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo. Tocá el
+        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo. En el diagrama 2D, tocá el
         triángulo bajo el pie para moverlo.
       </p>
 
@@ -259,25 +259,25 @@ export function ViewPanel() {
         checked={state.showLoadMap}
         onChange={() => dispatch({ type: 'toggle', key: 'showLoadMap' })}
         label="Mapa de carga"
-        hint="Colorea el esqueleto con gradientes cortos en cada articulación: oro apagado es poco, ladrillo es más, rojo oscuro es la que más momento aguanta en esta pose. El medio del segmento vuelve a tinta, para que no se pinte el cuerpo entero. Se mide contra la articulación más exigida del instante."
+        hint="En el diagrama 2D, los colores marcan la demanda articular. El rojo más oscuro indica un momento mayor."
       />
       <Switch
         checked={state.showCurves}
         onChange={() => dispatch({ type: 'toggle', key: 'showCurves' })}
         label="Curvas del recorrido"
-        hint="El momento de las cuatro articulaciones a lo largo del levantamiento, sobre el mismo eje que la barra de posición."
+        hint="Muestra cómo cambia cada momento articular del fondo a la extensión. El punto indica la posición actual."
       />
       <Switch
         checked={state.showMomentArms}
         onChange={() => dispatch({ type: 'toggle', key: 'showMomentArms' })}
         label="Brazos de palanca"
-        hint="La distancia horizontal de cada articulación a la línea de la barra, acotada en centímetros."
+        hint="En el diagrama 2D, muestra la distancia horizontal de cada articulación a la línea de la barra en centímetros."
       />
       <Switch
         checked={state.showComGuides}
         onChange={() => dispatch({ type: 'toggle', key: 'showComGuides' })}
         label="Centro de masa y punto de apoyo"
-        hint="Marca dónde cae la línea de gravedad del conjunto cuerpo más barra."
+        hint="En el diagrama 2D, marca dónde cae la línea de gravedad del conjunto cuerpo más barra."
       />
     </Section>
   )
@@ -310,23 +310,19 @@ export function ModelNotes() {
           Drillis y Contini. Las ocho masas segmentarias suman exactamente el peso corporal.
         </li>
         <li>
-          La columna son tres eslabones articulados y en reposo ya vienen curvados: lordosis lumbar
-          con su vértice en L3 y cifosis desde T12/L1. Por eso, cuando la flexionás, el torso se
-          acorta solo y el brazo de palanca de cadera baja: no hay ningún factor de corrección
-          inventado.
+          El modelo representa la columna con una curva de longitud fija. Al aumentar la
+          flexión, cambia la curvatura lumbar y torácica y se acorta la distancia recta
+          entre la cadera y el hombro.
         </li>
         {state.exercise === 'deadlift' && (
           <li>
-            El brazo <strong>arranca vertical</strong>, que es lo que hace una carga alta: el brazo
-            trabaja como tensor y el hombro queda sobre la barra. Con cargas livianas el hombro se
-            adelanta, y eso ahora lo movés vos con el control de brazo. No sale gratis: la barra
-            colgando sólo puede empujar la mano hacia arriba, así que cada centímetro de desfase se
-            lo come el hombro, y ese momento se informa aparte.
+            En el <strong>peso muerto</strong>, la barra ejerce una fuerza hacia abajo sobre
+            las manos. Si adelantás el hombro respecto de la barra, aumenta la distancia
+            horizontal a esa fuerza y crece el momento que debe sostener el hombro.
           </li>
         )}
         <li>
-          La coordinación es una <strong>hipótesis que elegís vos</strong>, no una predicción. El
-          modelo te dice qué cuesta cada patrón, no cuál deberías usar.
+          La coordinación es una <strong>hipótesis que elegís vos</strong>, no una predicción. Los momentos muestran cómo cambia la demanda articular entre patrones.
         </li>
         <li>
           La compresión lumbar es una estimación con un músculo equivalente de 6 cm de brazo a 10°,

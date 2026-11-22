@@ -1,0 +1,141 @@
+.anatomy-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #f8f6f0;
+  color-scheme: light;
+}
+
+/* Leave a small camera rail below the study. In portrait it also keeps the
+   controls away from the feet at full extension. */
+.anatomy-surface {
+  position: absolute;
+  inset: 0 0 38px;
+}
+
+.anatomy-surface canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.anatomy-surface canvas:active {
+  cursor: grabbing;
+}
+.anatomy-surface canvas:focus-visible {
+  outline: 2px solid #786f5f;
+  outline-offset: -3px;
+}
+
+.anatomy-loading {
+  position: absolute;
+  inset: 46% 0 auto;
+  text-align: center;
+  color: #746c5e;
+  font-size: 13px;
+}
+
+.anatomy-camera {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-height: 32px;
+  padding: 2px 4px;
+  color: #524d42;
+  border: 1px solid #d6d1c5;
+  border-radius: 7px;
+  background: #fbfaf6;
+}
+
+.anatomy-camera-view {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 6px;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.anatomy-camera-view select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 30px;
+  padding: 0 14px 0 0;
+  border-radius: 3px;
+}
+
+.anatomy-camera-view > svg:last-child {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+}
+
+.anatomy-camera-rule {
+  margin: 0 3px;
+  width: 1px;
+  height: 14px;
+  background: #d8d4c8;
+}
+
+.anatomy-camera button {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 30px;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.anatomy-camera button:hover:enabled {
+  background: #ede9de;
+}
+.anatomy-camera button:disabled {
+  opacity: 0.36;
+  cursor: default;
+}
+.anatomy-camera :is(button, select):focus-visible {
+  outline: 2px solid #786f5f;
+}
+
+.anatomy-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+  .anatomy-surface {
+    bottom: 46px;
+  }
+  .anatomy-camera {
+    bottom: 6px;
+    right: 8px;
+  }
+  .anatomy-camera button {
+    width: 38px;
+    height: 38px;
+  }
+  .anatomy-camera-view select {
+    line-height: 38px;
+  }
+}

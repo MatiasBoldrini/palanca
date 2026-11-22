@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useCallback, useId, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
 import { useSpringSnapshot } from '../hooks/useAnimationEngine'
 import { useElementSize, useMediaQuery } from '../hooks/useMediaQuery'
 import { type Vec2, clamp, lerp, lerpVec, sub } from '../model/geometry'
@@ -284,6 +284,21 @@ export function Figure({
   const { ref, size } = useElementSize<HTMLDivElement>()
   const { ref: controlsRef, size: controlsSize } = useElementSize<HTMLDivElement>()
   const { ref: popoverRef, size: popoverSize } = useElementSize<HTMLDivElement>()
+  const keyboardOpener = useRef<SVGGElement | null>(null)
+  const attachPopover = useCallback((node: HTMLDivElement | null) => {
+    popoverRef(node)
+    if (node && keyboardOpener.current) {
+      const control = node.querySelector<HTMLElement>('input') ?? node.querySelector('button')
+      control?.focus({ preventScroll: true })
+    }
+  }, [popoverRef])
+  useEffect(() => {
+    if (selected || !keyboardOpener.current) return
+    if (document.activeElement?.closest('.popover') || document.activeElement === document.body) {
+      keyboardOpener.current.focus({ preventScroll: true })
+    }
+    keyboardOpener.current = null
+  }, [selected])
   const { ref: panelRef, size: panelSize } = useElementSize<HTMLDivElement>()
 
   const VIEW_W = Math.max(size.width, 200)
@@ -334,13 +349,14 @@ export function Figure({
   }, [bounds.minX, bounds.maxX, bounds.maxY, selectedHotspot, narrow])
   const camera = useSpringSnapshot(cameraTarget, {
     stiffness: editing ? 70 : 90,
+    resetKey: exercise,
     dampingRatio: 1,
   })
 
   const worldW = Math.max(camera.maxX - camera.minX, 0.45)
   const worldH = Math.max(camera.maxY * 1.06, 0.5)
   const boxW = Math.max(VIEW_W - padLeft - padRight, 80)
-  const boxH = VIEW_H - padTop - padBottom
+  const boxH = Math.max(VIEW_H - padTop - padBottom, 40)
   const scale = Math.min(boxW / worldW, boxH / worldH)
 
   // In a tall narrow pane the drawing is width-limited, so the block is
@@ -513,11 +529,17 @@ export function Figure({
     <div
       className={dockInspector ? 'figure focus-edit' : editing ? 'figure editing' : 'figure'}
       ref={ref}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && selected) {
+          event.stopPropagation()
+          onSelect(null)
+        }
+      }}
     >
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="figure-svg"
-        role="img"
+        role="group"
         aria-label={`Modelo de ${exercise === 'deadlift' ? 'peso muerto' : 'sentadilla'}`}
         onClick={() => onSelect(null)}
       >
@@ -826,11 +848,13 @@ export function Figure({
               aria-label={`Ajustar ${hotspot.label.toLowerCase()}`}
               onClick={(event) => {
                 event.stopPropagation()
+                keyboardOpener.current = null
                 onSelect(active ? null : hotspot.id)
               }}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
+                keyboardOpener.current = event.currentTarget
                 onSelect(active ? null : hotspot.id)
               }}
             >
@@ -935,7 +959,7 @@ export function Figure({
           <motion.div
             key={selected ?? 'popover'}
             className={dockInspector ? 'popover-layer docked' : 'popover-layer'}
-            ref={popoverRef}
+            ref={attachPopover}
             style={popoverStyle}
             initial={{
               opacity: 0,

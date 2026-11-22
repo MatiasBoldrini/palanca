@@ -279,6 +279,31 @@ function edge(from: number, to: number, works: (v: number) => boolean): number {
   return good
 }
 
+/** Recover the closest reachable height after a change to body, load or exercise. */
+export function nearestFeasibleProgress(setup: Setup): number | null {
+  const here = clamp(setup.task.progress, 0, 1)
+  const works = (value: number) => poseExists(setup, 'progress', value)
+  if (works(here)) return here
+
+  // Search on both sides before choosing an edge. This runs only when a setup
+  // change invalidated the old height, never in a healthy playback loop.
+  const samples = 100
+  let previousLow = here
+  let previousHigh = here
+  for (let i = 1; i <= samples; i++) {
+    const distance = i / samples
+    const below = Math.max(0, here - distance)
+    const above = Math.min(1, here + distance)
+    const low = below < previousLow && works(below) ? edge(below, previousLow, works) : null
+    const high = above > previousHigh && works(above) ? edge(above, previousHigh, works) : null
+    if (low !== null && high !== null) return here - low <= high - here ? low : high
+    if (low !== null || high !== null) return low ?? high
+    previousLow = below
+    previousHigh = above
+  }
+  return null
+}
+
 const STEPS = 10
 
 /**
@@ -292,9 +317,14 @@ export function feasibleRange(id: ParamId, setup: Setup): Range {
   if (bounds.max - bounds.min < 1e-9) return bounds
 
   const works = (v: number) => poseExists(setup, id, v)
-  const here = clamp(paramValue(id, setup), bounds.min, bounds.max)
-  // A setup that is already impossible would otherwise freeze every control.
-  if (!works(here)) return bounds
+  let here = clamp(paramValue(id, setup), bounds.min, bounds.max)
+  if (!works(here)) {
+    // Keep the body controls available to recover from an impossible setup.
+    if (id !== 'progress') return bounds
+    const recovery = nearestFeasibleProgress(setup)
+    if (recovery === null) return { min: here, max: here }
+    here = recovery
+  }
 
   const step = (bounds.max - bounds.min) / STEPS
   const walk = (direction: 1 | -1, stop: number): number => {

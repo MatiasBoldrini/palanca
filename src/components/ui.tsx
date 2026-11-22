@@ -54,10 +54,7 @@ export function Slider({
       {marks && (
         <div className="slider-marks">
           {marks.map((mark) => (
-            <span
-              key={mark.label}
-              style={{ left: `${((mark.at - min) / (max - min)) * 100}%` }}
-            >
+            <span key={mark.label} style={{ left: `${((mark.at - min) / (max - min)) * 100}%` }}>
               {mark.label}
             </span>
           ))}
@@ -74,6 +71,7 @@ interface SegmentedProps<T extends string> {
   onChange: (value: T) => void
   size?: 'sm' | 'md'
   groupId?: string
+  panelId?: string
 }
 
 export function Segmented<T extends string>({
@@ -82,23 +80,41 @@ export function Segmented<T extends string>({
   onChange,
   size = 'md',
   groupId,
+  panelId,
 }: SegmentedProps<T>) {
   const fallbackId = useId()
+  const id = groupId ?? fallbackId
   return (
-    <div className={`segmented ${size}`} role="tablist">
-      {options.map((option) => {
+    <div className={`segmented ${size}`} role="tablist" aria-label="Ejercicio">
+      {options.map((option, index) => {
         const active = option.value === value
         return (
           <button
             key={option.value}
+            id={`${id}-${option.value}`}
             role="tab"
+            tabIndex={active ? 0 : -1}
+            aria-controls={panelId}
             aria-selected={active}
+            onKeyDown={(event) => {
+              const destination: Record<string, number> = {
+                ArrowLeft: (index - 1 + options.length) % options.length,
+                ArrowRight: (index + 1) % options.length,
+                Home: 0,
+                End: options.length - 1,
+              }
+              const next = destination[event.key]
+              if (next === undefined) return
+              event.preventDefault()
+              document.getElementById(`${id}-${options[next].value}`)?.focus()
+              onChange(options[next].value)
+            }}
             className={active ? 'segment active' : 'segment'}
             onClick={() => onChange(option.value)}
           >
             {active && (
               <motion.span
-                layoutId={`segment-${groupId ?? fallbackId}`}
+                layoutId={`segment-${id}`}
                 className="segment-pill"
                 transition={{ type: 'spring', stiffness: 480, damping: 40 }}
               />
@@ -209,6 +225,7 @@ export function Chip({
 }) {
   return (
     <button
+      aria-pressed={Boolean(active)}
       className={active ? 'chip active' : 'chip'}
       onClick={onClick}
       style={active && accent ? ({ '--chip-accent': accent } as React.CSSProperties) : undefined}

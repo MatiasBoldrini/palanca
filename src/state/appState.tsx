@@ -13,7 +13,7 @@ import {
   anthropometryFromHeight,
   heightFromSegments,
 } from '../model/anthropometry'
-import type { SetupPatch } from '../model/interact'
+import { nearestFeasibleProgress, type SetupPatch } from '../model/interact'
 import {
   type Coordination,
   DEFAULT_TASK,
@@ -79,29 +79,49 @@ function withCoordination(state: AppState, patch: Partial<Coordination>): AppSta
   }
 }
 
-function reducer(state: AppState, action: Action): AppState {
+function alignProgress(state: AppState): AppState {
+  const progress = nearestFeasibleProgress({
+    exercise: state.exercise, task: state.task, anthro: state.anthro,
+    coordination: state.coordination[state.exercise],
+  })
+  if (progress === null || progress === state.task.progress) return state
+  return { ...state, task: { ...state.task, progress } }
+}
+
+function reduceState(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'setExercise':
-      return { ...state, exercise: action.exercise, task: { ...state.task, progress: 0 } }
+      if (state.exercise === action.exercise) return state
+      return {
+        ...state,
+        exercise: action.exercise,
+        playing: false,
+        task: { ...state.task, progress: action.exercise === 'squat' ? 1 : 0 },
+      }
     case 'setTask':
-      return { ...state, task: { ...state.task, ...action.patch, balance: 'cop' } }
+      return {
+        ...state,
+        playing: state.playing && Object.keys(action.patch).every((key) => key === 'progress'),
+        task: { ...state.task, ...action.patch, balance: 'cop' },
+      }
     case 'setAnthro':
-      return { ...state, anthro: withDerivedHeight({ ...state.anthro, ...action.patch }) }
+      return { ...state, playing: false, anthro: withDerivedHeight({ ...state.anthro, ...action.patch }) }
     case 'resetProportions': {
       // Back to the table's proportions for the height the segments currently
       // imply, keeping the mass and mobility the user set.
       const scaled = anthropometryFromHeight(heightFromSegments(state.anthro), state.anthro.mass)
       return {
         ...state,
+        playing: false,
         anthro: { ...scaled, maxDorsiflexion: state.anthro.maxDorsiflexion },
       }
     }
     case 'setCoordination':
-      return withCoordination(state, action.patch)
+      return withCoordination({ ...state, playing: false }, action.patch)
     case 'setParams': {
       // Body, task and coordination land in one dispatch, so the figure never
       // renders a pose that is half old and half new.
-      let next = state
+      let next = { ...state, playing: false }
       if (action.patch.anthro) {
         next = { ...next, anthro: withDerivedHeight({ ...next.anthro, ...action.patch.anthro }) }
       }
@@ -123,6 +143,16 @@ function reducer(state: AppState, action: Action): AppState {
     default:
       return state
   }
+}
+
+function reducer(state: AppState, action: Action): AppState {
+  const next = reduceState(state, action)
+  if (state === next || action.type === 'setPlaying' || action.type === 'toggle') return next
+  // Scrubbing and RAF updates already use the current feasible range.
+  if (action.type === 'setTask' && Object.keys(action.patch).every((key) => key === 'progress')) {
+    return next
+  }
+  return alignProgress(next)
 }
 
 interface Store {
@@ -220,13 +250,13 @@ function loadInitial(): AppState {
   const hash = window.location.hash.replace(/^#s=/, '')
   if (hash) {
     const fromUrl = decode(hash)
-    if (fromUrl) return { ...initialState, ...fromUrl }
+    if (fromUrl) return alignProgress({ ...initialState, ...fromUrl })
   }
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = decode(stored)
-      if (parsed) return { ...initialState, ...parsed }
+      if (parsed) return alignProgress({ ...initialState, ...parsed })
     }
   } catch {
     /* storage unavailable */
@@ -238,8 +268,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitial)
 
   useEffect(() => {
-    const encoded = encode(state)
+    // Keep serialization and history writes off the frame loop.
+    if (state.playing) return
     const timer = window.setTimeout(() => {
+      const encoded = encode(state)
       try {
         window.localStorage.setItem(STORAGE_KEY, encoded)
       } catch {

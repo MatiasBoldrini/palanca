@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   type Anthropometry,
   GRAVITY,
+  DEFAULT_ANTHROPOMETRY,
+  heightFromSegments,
   SEGMENT_MASS,
   anthropometryFromHeight,
   standingHipHeight,
@@ -16,7 +18,7 @@ import {
   solveFrame,
   solveSquat,
 } from './lift'
-import { type ParamId, type Setup, feasibleRange, patchFor } from './interact'
+import { type ParamId, type Setup, feasibleRange, nearestFeasibleProgress, patchFor } from './interact'
 import { type TrunkShape, buildTrunkShape } from './posture'
 
 /** Mean subject from Edington et al. (2018), Sports 6(3):90. */
@@ -197,6 +199,26 @@ describe('deadlift solver', () => {
       tested += 1
     }
     expect(tested).toBeGreaterThan(2)
+  })
+
+  it('releases shin contact continuously when the bar clears the knee', () => {
+    // A rearward support point and a forward knee keep the bar against the
+    // shin through the crossing. The old cutoff lost several cm in one frame.
+    const lift = { ...task, cop: -0.06 }
+    let previous = solveDeadlift(EDINGTON, lift, farBar)
+    let crossed = false
+    for (let i = 1; i <= 1000; i++) {
+      const current = solveDeadlift(EDINGTON, { ...lift, progress: i / 1000 }, farBar)
+      if (previous.posture.bar.y <= previous.posture.knee.y &&
+          current.posture.bar.y > current.posture.knee.y) {
+        expect(previous.barBlocked).toBe(true)
+        expect(Math.abs(current.posture.bar.x - previous.posture.bar.x)).toBeLessThan(0.002)
+        expect(dist(current.posture.headTop, previous.posture.headTop)).toBeLessThan(0.003)
+        crossed = true
+      }
+      previous = current
+    }
+    expect(crossed).toBe(true)
   })
 
   it('leaves an achievable bar position untouched', () => {
@@ -403,6 +425,26 @@ describe('work of the lift', () => {
     expect(series.work).toBeCloseTo((EDINGTON.mass + task.load) * GRAVITY * rise, 6)
   })
 
+  it('keeps work, chart samples and camera poses inside the reachable range', () => {
+    const coord = { ...closeBar, kneeTravel: 1 }
+    const range = { min: 0.18, max: 0.78 }
+    const series = simulateSeries('deadlift', EDINGTON, task, coord, 33, range)
+    const bottom = solveDeadlift(EDINGTON, { ...task, progress: range.min }, coord)
+    const top = solveDeadlift(EDINGTON, { ...task, progress: range.max }, coord)
+    expect(series.postures).toHaveLength(33)
+    expect(series.points[0].progress).toBe(range.min)
+    expect(series.points.at(-1)?.progress).toBeCloseTo(range.max)
+    expect(series.postures[0].bar).toEqual(bottom.posture.bar)
+    expect(series.postures.at(-1)?.bar.y).toBeCloseTo(top.posture.bar.y)
+    expect(series.work).toBeCloseTo((top.kinetics.com.y - bottom.kinetics.com.y) *
+      (task.load + EDINGTON.mass) * GRAVITY, 6)
+
+    const held = simulateSeries('deadlift', EDINGTON, task, coord, 33, { min: 0.4, max: 0.4 })
+    expect(held.points.map((point) => point.progress)).toEqual([0.4])
+    expect(held.work).toBe(0)
+    expect(held.postures).toHaveLength(1)
+  })
+
   it('scales with the load, since the bar is most of what goes up', () => {
     const light = simulateSeries('deadlift', EDINGTON, { ...task, load: 60 }, closeBar, 41)
     const heavy = simulateSeries('deadlift', EDINGTON, { ...task, load: 240 }, closeBar, 41)
@@ -454,6 +496,30 @@ describe('control ranges', () => {
     'torso',
     'arm',
   ]
+
+  it.each(['deadlift', 'squat'] as const)('recovers a reachable %s endpoint after changing setup', (exercise) => {
+    const dimensions = exercise === 'squat' ? { torso: 0.35, arm: 0.80 } : { shank: 0.60, thigh: 0.30 }
+    const anthro = { ...DEFAULT_ANTHROPOMETRY, ...dimensions }
+    anthro.height = heightFromSegments(anthro)
+    const setup = setupFor(exercise, {
+      anthro,
+      coordination: exercise === 'squat'
+        ? { kneeTravel: 0.25, spineFlexion: 8, armLean: 0, barOffset: 0.085 }
+        : { kneeTravel: 0, spineFlexion: 12, armLean: 0, barOffset: 0 },
+      task: { ...DEFAULT_TASK, cop: -0.06, load: 20, progress: exercise === 'squat' ? 1 : 0 },
+    })
+    const at = (progress: number) =>
+      solveFrame(exercise, anthro, { ...setup.task, progress }, setup.coordination).feasible
+    expect(at(setup.task.progress)).toBe(false)
+    const range = feasibleRange('progress', setup)
+    const recovered = nearestFeasibleProgress(setup)!
+    expect(recovered).not.toBeNull()
+    expect(at(recovered)).toBe(true)
+    expect(recovered).toBeCloseTo(exercise === 'squat' ? range.max : range.min, 3)
+    for (let i = 0; i <= 20; i++) {
+      expect(at(range.min + (range.max - range.min) * i / 20)).toBe(true)
+    }
+  })
 
   it('only offers values that produce a pose the model can actually build', () => {
     for (const exercise of ['deadlift', 'squat'] as ExerciseId[]) {

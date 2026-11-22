@@ -259,15 +259,17 @@ function assemble(
 const BAR_SHIN_CLEARANCE = 0.016
 
 /**
- * Front of the shin at a given height, or nothing at all above the knee, where
- * there is no shin to get in the way. Holding the knee's position all the way
- * up was pinning the bar out in front for the whole back half of the pull.
+ * Below the knee, contact follows the shin. Above it, release that horizontal
+ * constraint along a parabola tangent to the shin, using the existing bar
+ * clearance as its length scale. The free bar path takes over as soon as it
+ * lies in front of this envelope. Dropping the constraint in a single frame
+ * used to send the bar several centimetres backwards at the knee.
  */
 function shinFrontAt(ankle: Vec2, knee: Vec2, height: number): number {
-  if (height > knee.y) return -Infinity
   const span = knee.y - ankle.y
-  const t = span > 1e-6 ? clamp((height - ankle.y) / span, 0, 1) : 0
-  return ankle.x + (knee.x - ankle.x) * t
+  const slope = span > 1e-6 ? (knee.x - ankle.x) / span : 0
+  const rise = Math.max(0, height - knee.y)
+  return ankle.x + slope * Math.max(0, height - ankle.y) - rise * rise / (4 * BAR_SHIN_CLEARANCE)
 }
 
 /** The parts of a deadlift pose that are fixed before the bar is placed. */
@@ -513,6 +515,7 @@ export interface Bounds {
 
 export interface Series {
   points: SeriesPoint[]
+  postures: Posture[]
   peak: { hip: number; knee: number; l5s1: number; ankle: number }
   /**
    * Mechanical work of the whole lift, in joules: the potential energy the
@@ -575,8 +578,10 @@ export function simulateSeries(
   task: Task,
   coord: Coordination,
   samples = 41,
+  range = { min: 0, max: 1 },
 ): Series {
   const points: SeriesPoint[] = []
+  const postures: Posture[] = []
   const peak = { hip: 0, knee: 0, l5s1: 0, ankle: 0 }
   let peakHipProgress = 0
   const systemWeight = (a.mass + task.load) * GRAVITY
@@ -589,9 +594,11 @@ export function simulateSeries(
     maxY: -Infinity,
   }
 
-  for (let i = 0; i < samples; i++) {
-    const progress = i / (samples - 1)
+  const count = range.max > range.min ? Math.max(2, Math.round(samples)) : 1
+  for (let i = 0; i < count; i++) {
+    const progress = count === 1 ? range.min : lerp(range.min, range.max, i / (count - 1))
     const frame = solveFrame(exercise, a, { ...task, progress }, coord)
+    postures.push(frame.posture)
     growBounds(bounds, frame, task.plateRadius, exercise)
 
     // Only the rises count. Summing every step this way rather than taking the
@@ -620,5 +627,5 @@ export function simulateSeries(
     peak.ankle = Math.max(peak.ankle, Math.abs(point.ankle))
   }
 
-  return { points, peak, peakHipProgress, bounds, work }
+  return { points, postures, peak, peakHipProgress, bounds, work }
 }

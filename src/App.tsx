@@ -1,6 +1,22 @@
-import { AnimatePresence, motion } from 'motion/react'
-import { Settings, X } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { MotionConfig } from 'motion/react'
+import {
+  Activity,
+  Bone,
+  Box,
+  ChartSpline,
+  Hand,
+  Layers3,
+  SlidersHorizontal,
+  Spline,
+  Weight,
+} from 'lucide-react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import type { MuscleId } from './anatomy/body'
+import { LiftTransport } from './components/LiftTransport'
+import { MuscleAtlas } from './components/MuscleAtlas'
+import { entries as muscleGuide } from './components/muscleGuide'
+import { SettingsDialog } from './components/SettingsDialog'
+import { ViewerBoundary } from './components/ViewerBoundary'
 import { Figure } from './components/Figure'
 import {
   BodyPanel,
@@ -10,10 +26,9 @@ import {
   ViewPanel,
 } from './components/ControlPanel'
 import { Inspector } from './components/Inspector'
-import { MetricsTable, WorkReadout, buildRows } from './components/Metrics'
+import { MetricsTable, buildRows } from './components/Metrics'
 import { MomentPanel } from './components/MomentPanel'
 import { Collapsible, Segmented } from './components/ui'
-import { useMediaQuery } from './hooks/useMediaQuery'
 import { usePlayback, useSpringSnapshot } from './hooks/useAnimationEngine'
 import { clamp } from './model/geometry'
 import {
@@ -28,20 +43,30 @@ import {
 } from './model/interact'
 import { formatParam } from './components/params'
 import type { Coordination, Task } from './model/lift'
-import { frameBounds, simulateSeries, solveFrame } from './model/lift'
+import { simulateSeries, solveFrame } from './model/lift'
 import type { Anthropometry } from './model/anthropometry'
 import { AppStateProvider, useApp, useShareLink } from './state/appState'
 import { EXERCISE_META } from './state/presets'
 import './styles/base.css'
 import './styles/app.css'
 
-/** The one hue: the bar, the things you can act on, and the load ramp's top. */
+import './styles/atlas.css'
+
+const AnatomyViewer = lazy(() => import('./components/AnatomyViewer'))
 const ACCENT = 'var(--accent)'
 
 function Shell() {
   const { state, dispatch, coordination } = useApp()
   const share = useShareLink()
-  const isDesktop = useMediaQuery('(min-width: 940px)')
+  const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
+  const [layer, setLayer] = useState<'muscles' | 'skeleton'>('muscles')
+  const [muscle, setMuscle] = useState<MuscleId | null>(null)
+  const [slow, setSlow] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+  const useDiagramFallback = useCallback(() => {
+    setUnavailable(true)
+    setMode('diagram')
+  }, [])
   const [shared, setShared] = useState(false)
   const [selected, setSelected] = useState<HotspotId | null>(null)
   // Closed to begin with: the drawing is the app, and everything in here has a
@@ -68,10 +93,14 @@ function Shell() {
       torso: anthro.torso,
       arm: anthro.arm,
     }),
-    [coordination, task, anthro],
+    [coordination, task.load, task.cop, task.depth, task.barPosition, anthro],
   )
 
-  const anim = useSpringSnapshot(springTarget, { stiffness: 300, dampingRatio: 1 })
+  const anim = useSpringSnapshot(springTarget, {
+    stiffness: 300,
+    dampingRatio: 1,
+    resetKey: exercise,
+  })
 
   const stopPlayback = useCallback(
     () => dispatch({ type: 'setPlaying', playing: false }),
@@ -92,9 +121,9 @@ function Shell() {
     [anim, anthro.maxDorsiflexion],
   )
 
-  const solvedTask: Task = useMemo(
+  const seriesTask: Task = useMemo(
     () => ({
-      progress: task.progress,
+      progress: 0,
       load: anim.load,
       cop: anim.cop,
       depth: anim.depth,
@@ -102,7 +131,12 @@ function Shell() {
       plateRadius: task.plateRadius,
       balance: task.balance,
     }),
-    [anim, task.progress, task.plateRadius, task.balance],
+    [anim, task.plateRadius, task.balance],
+  )
+
+  const solvedTask = useMemo(
+    () => ({ ...seriesTask, progress: task.progress }),
+    [seriesTask, task.progress],
   )
 
   const solvedCoordination: Coordination = useMemo(
@@ -120,68 +154,12 @@ function Shell() {
     [exercise, solvedAnthro, solvedTask, solvedCoordination],
   )
 
-  const seriesKey = [
-    exercise,
-    anim.load,
-    anim.cop,
-    anim.depth,
-    anim.barPosition,
-    task.balance,
-    anim.height,
-    anim.mass,
-    anim.foot,
-    anim.shank,
-    anim.thigh,
-    anim.torso,
-    anim.arm,
-  ].join('|')
-
-  const series = useMemo(
-    () => simulateSeries(exercise, solvedAnthro, solvedTask, solvedCoordination, 33),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [seriesKey, anim.kneeTravel, anim.spineFlexion, anim.armLean, anim.barOffset],
-  )
-
-  const peakMoment = useMemo(
-    () => Math.max(series.peak.hip, series.peak.knee, series.peak.l5s1, series.peak.ankle),
-    [series],
-  )
-
-  const bounds = useMemo(
-    () => frameBounds(frame, task.plateRadius, exercise),
-    [frame, task.plateRadius, exercise],
-  )
-
-  // Each part carries what it currently reads, so hovering it can say what it
-  // is and where it stands before you commit to opening anything.
-  const hotspots = useMemo(
-    () =>
-      hotspotsFor(exercise, frame, state.showComGuides).map((hotspot) => {
-        const primary = paramsFor(hotspot.id, exercise)[0]
-        return {
-          ...hotspot,
-          readout: primary
-            ? formatParam(primary, paramValue(primary, { exercise, anthro, task, coordination }))
-            : undefined,
-        }
-      }),
-    [exercise, frame, state.showComGuides, anthro, task, coordination],
-  )
-
   // The settled setup, not the springed one: feasible ranges have to describe
   // where the controls are actually allowed to go, not where a transition
   // happens to be passing through.
   const setup: Setup = useMemo(
     () => ({ exercise, anthro, task, coordination }),
     [exercise, anthro, task, coordination],
-  )
-
-  const setParam = useCallback(
-    (id: ParamId, value: number) => {
-      if (state.playing) dispatch({ type: 'setPlaying', playing: false })
-      dispatch({ type: 'setParams', patch: patchFor(id, value) })
-    },
-    [dispatch, state.playing],
   )
 
   // The scrubber and the playback loop go through the same gate as every other
@@ -206,6 +184,39 @@ function Shell() {
       task.plateRadius,
     ],
   )
+  const series = useMemo(
+    () => simulateSeries(exercise, solvedAnthro, seriesTask, solvedCoordination, 33, progressRange),
+    [exercise, solvedAnthro, seriesTask, solvedCoordination, progressRange],
+  )
+
+  const peakMoment = useMemo(
+    () => Math.max(series.peak.hip, series.peak.knee, series.peak.l5s1, series.peak.ankle),
+    [series],
+  )
+
+  // Each part carries what it currently reads, so hovering it can say what it
+  // is and where it stands before you commit to opening anything.
+  const hotspots = useMemo(() => {
+    if (mode !== 'diagram' || state.playing) return []
+    return hotspotsFor(exercise, frame, state.showComGuides).map((hotspot) => {
+      const primary = paramsFor(hotspot.id, exercise)[0]
+      return {
+        ...hotspot,
+        readout: primary
+          ? formatParam(primary, paramValue(primary, { exercise, anthro, task, coordination }))
+          : undefined,
+      }
+    })
+  }, [mode, state.playing, exercise, frame, state.showComGuides, anthro, task, coordination])
+
+  const setParam = useCallback(
+    (id: ParamId, value: number) => {
+      if (state.playing) dispatch({ type: 'setPlaying', playing: false })
+      dispatch({ type: 'setParams', patch: patchFor(id, value) })
+    },
+    [dispatch, state.playing],
+  )
+
   const setProgress = useCallback(
     (progress: number) =>
       dispatch({
@@ -214,11 +225,22 @@ function Shell() {
       }),
     [dispatch, progressRange],
   )
-  usePlayback(task.progress, state.playing, setProgress, stopPlayback, progressRange)
+  const phase = usePlayback(
+    task.progress,
+    state.playing,
+    setProgress,
+    stopPlayback,
+    progressRange,
+    slow ? 14 : 7,
+    exercise,
+  )
 
   const selectedHotspot = hotspots.find((h) => h.id === selected) ?? null
 
-  const rows = useMemo(() => buildRows(frame, exercise), [frame, exercise])
+  const rows = useMemo(
+    () => (panelOpen ? buildRows(frame, exercise) : []),
+    [panelOpen, frame, exercise],
+  )
 
   // Mid-transition poses pass through settings the user never chose, so
   // warnings only appear once the springs have caught up with the target.
@@ -253,6 +275,18 @@ function Shell() {
         </Collapsible>
       </section>
       <ModelNotes />
+      <p className="caption">
+        El atlas ilustra la anatomía de cada grupo. Los momentos corresponden a las articulaciones.
+        Para repasar las funciones musculares, consultá{' '}
+        <a
+          href="https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Anatomy and Physiology de OpenStax
+        </a>
+        .
+      </p>
       <footer className="foot">
         <button className="icon-button share-in-panel" onClick={onShare}>
           {shared ? 'Enlace copiado' : 'Compartir enlace'}
@@ -265,182 +299,294 @@ function Shell() {
     </>
   )
 
-  const shellClass = [
-    'app',
-    isDesktop ? 'desktop' : 'mobile',
-    panelOpen ? 'panel-open' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const chooseMuscle = (id: MuscleId | null) => {
+    setMuscle(id)
+    if (id && !unavailable) {
+      setMode('anatomy')
+      setLayer('muscles')
+    }
+  }
+  const openSettings = () => {
+    stopPlayback()
+    setPanelOpen(true)
+  }
+  const chooseView = (value: 'anatomy' | 'diagram') => {
+    setMode(value)
+    setUnavailable(false)
+    setSelected(null)
+  }
 
   return (
-    <div className={shellClass}>
-      <header className="topbar blur">
-        <div className="brand">
-          <span className="brand-mark" />
-          <div>
-            <h1 className="title-lg">Palanca</h1>
-            <p className="brand-sub">{EXERCISE_META[exercise].name}</p>
+    <div className="atlas-app">
+      <header className="atlas-header">
+        <div className="atlas-header-inner">
+          <div className="atlas-brand">
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width="32" height="32" />
+            <strong>Palanca</strong>
+            <span>Laboratorio de biomecánica</span>
           </div>
-        </div>
-        <div className="topbar-tabs">
-          <Segmented
-            value={exercise}
-            groupId="exercise"
-            options={[
-              { value: 'deadlift', label: 'Peso muerto' },
-              { value: 'squat', label: 'Sentadilla' },
-            ]}
-            onChange={(value) => dispatch({ type: 'setExercise', exercise: value })}
-          />
-        </div>
-        <div className="topbar-actions">
-          <button
-            className={panelOpen ? 'ghost-icon on' : 'ghost-icon'}
-            aria-expanded={panelOpen}
-            aria-label={panelOpen ? 'Cerrar ajustes' : 'Ajustes'}
-            onClick={() => setPanelOpen(!panelOpen)}
-          >
-            {panelOpen ? (
-              <X size={20} strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Settings size={20} strokeWidth={1.75} aria-hidden />
-            )}
+          <nav aria-label="Ejercicio">
+            <Segmented
+              value={exercise}
+              groupId="exercise"
+              panelId="exercise-panel"
+              options={[
+                { value: 'deadlift', label: 'Peso muerto' },
+                { value: 'squat', label: 'Sentadilla' },
+              ]}
+              onChange={(value) => {
+                if (exercise === value) return
+                setSelected(null)
+                dispatch({ type: 'setExercise', exercise: value })
+              }}
+            />
+          </nav>
+          <button className="settings-open" onClick={openSettings} aria-haspopup="dialog">
+            <SlidersHorizontal size={16} aria-hidden /> Ajustes
           </button>
         </div>
       </header>
-
-      <div className="workspace">
-        <main className="stage">
-          <Figure
-            frame={frame}
-            bounds={bounds}
-            exercise={exercise}
-            color={ACCENT}
-            showComGuides={state.showComGuides}
-            showMomentArms={state.showMomentArms}
-            showLoadMap={state.showLoadMap}
-            plateRadius={task.plateRadius}
-            peakMoment={peakMoment}
-            hotspots={state.playing ? [] : hotspots}
-            selected={state.playing ? null : selected}
-            onSelect={setSelected}
-            panel={
+      <main className="atlas-main">
+        <header className="exercise-head">
+          <div>
+            <h1>{EXERCISE_META[exercise].name}</h1>
+            <p>
+              {exercise === 'deadlift'
+                ? 'Seguí la barra desde el suelo y observá cómo se extienden la cadera y las rodillas.'
+                : 'Seguí el descenso de la cadera y la extensión de las rodillas al volver a subir.'}
+            </p>
+          </div>
+          <div className="bar-load">
+            <Weight size={19} strokeWidth={1.5} aria-hidden />
+            <span>
+              Carga en barra<strong className="num">{task.load.toLocaleString('es-AR')} kg</strong>
+            </span>
+          </div>
+        </header>
+        <div
+          className="atlas-layout"
+          id="exercise-panel"
+          role="tabpanel"
+          aria-labelledby={`exercise-${exercise}`}
+        >
+          <div className="lift-column">
+            <section className="atlas-card viewer-card" aria-label="Simulador del levantamiento">
+              <div className="view-toolbar">
+                <div className="view-modes" role="group" aria-label="Representación">
+                  <button aria-pressed={mode === 'anatomy'} onClick={() => chooseView('anatomy')}>
+                    <Box size={16} aria-hidden />
+                    Anatomía 3D
+                  </button>
+                  <button aria-pressed={mode === 'diagram'} onClick={() => chooseView('diagram')}>
+                    <Spline size={16} aria-hidden />
+                    Diagrama 2D
+                  </button>
+                </div>
+                {mode === 'anatomy' && (
+                  <label className="layer-picker">
+                    {layer === 'muscles' ? (
+                      <Layers3 size={15} aria-hidden />
+                    ) : (
+                      <Bone size={15} aria-hidden />
+                    )}
+                    <select
+                      aria-label="Capa anatómica"
+                      value={layer}
+                      onChange={(e) => {
+                        setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
+                        if (e.target.value === 'skeleton') setMuscle(null)
+                      }}
+                    >
+                      <option value="muscles">Músculos</option>
+                      <option value="skeleton">Esqueleto</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+              {unavailable && (
+                <p className="fallback-note" role="status">
+                  El visor 3D no pudo iniciarse. Podés explorar el mismo movimiento en el diagrama o
+                  volver a intentar con Anatomía 3D.
+                </p>
+              )}
+              <div className={`atlas-viewport ${mode}`} id="lift-viewport" tabIndex={-1}>
+                {mode === 'anatomy' && (
+                  <div className="model-hint">
+                    {muscle && layer === 'muscles' ? (
+                      <button onClick={() => document.getElementById('muscle-title')?.focus()}>
+                        {muscleGuide[muscle].name} <span>Ver ficha</span>
+                      </button>
+                    ) : (
+                      <>
+                        <Hand size={13} aria-hidden />
+                        <span>Arrastrá para girar</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {mode === 'anatomy' ? (
+                  <ViewerBoundary onUnavailable={useDiagramFallback}>
+                    <Suspense
+                      fallback={
+                        <p className="viewer-loading" role="status">
+                          Cargando el atlas anatómico…
+                        </p>
+                      }
+                    >
+                      <AnatomyViewer
+                        playing={state.playing}
+                        postures={series.postures}
+                        bounds={series.bounds}
+                        frame={frame}
+                        exercise={exercise}
+                        anthro={solvedAnthro}
+                        task={solvedTask}
+                        layer={layer}
+                        selectedMuscle={muscle}
+                        onSelectMuscle={setMuscle}
+                        onUnavailable={useDiagramFallback}
+                      />
+                    </Suspense>
+                  </ViewerBoundary>
+                ) : (
+                  <Figure
+                    frame={frame}
+                    bounds={series.bounds}
+                    exercise={exercise}
+                    color={ACCENT}
+                    showComGuides={state.showComGuides}
+                    showMomentArms={state.showMomentArms}
+                    showLoadMap={state.showLoadMap}
+                    plateRadius={task.plateRadius}
+                    peakMoment={peakMoment}
+                    hotspots={state.playing ? [] : hotspots}
+                    selected={state.playing ? null : selected}
+                    onSelect={setSelected}
+                    popover={
+                      selectedHotspot &&
+                      !state.playing && (
+                        <Inspector
+                          hotspot={selectedHotspot.id}
+                          label={selectedHotspot.label}
+                          setup={setup}
+                          accent={ACCENT}
+                          onChange={setParam}
+                          onClose={() => setSelected(null)}
+                        />
+                      )
+                    }
+                  />
+                )}
+              </div>
+              <LiftTransport
+                exercise={exercise}
+                frame={frame}
+                progress={task.progress}
+                range={progressRange}
+                playing={state.playing}
+                phase={phase}
+                slow={slow}
+                onSpeed={() => setSlow(!slow)}
+                onPlay={() => {
+                  setSelected(null)
+                  dispatch({ type: 'setPlaying', playing: !state.playing })
+                }}
+                onScrub={(value) => {
+                  stopPlayback()
+                  setProgress(value)
+                }}
+              />
+              {mode === 'diagram' && (
+                <p className="diagram-help">
+                  Tocá una articulación o un segmento para ajustar el modelo.
+                </p>
+              )}
+              {(warnings.length > 0 || frame.barBlocked) && (
+                <div className="model-warnings">
+                  {warnings.map((warning) => (
+                    <p key={warning}>{warning}</p>
+                  ))}
+                  {frame.barBlocked && <p>La tibia limita el recorrido de la barra hacia atrás.</p>}
+                </div>
+              )}
+            </section>
+            <dl className="pose-readings atlas-card">
+              <div>
+                <dt>Flexión de cadera</dt>
+                <dd>
+                  {Math.round(frame.angles.hipFlexion)}
+                  <small>°</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Flexión de rodilla</dt>
+                <dd>
+                  {Math.round(frame.angles.kneeFlexion)}
+                  <small>°</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Trabajo del ascenso</dt>
+                <dd>
+                  {Math.round(series.work).toLocaleString('es-AR')} <small>J</small>
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <aside className="atlas-rail" aria-label="Guía del movimiento">
+            <MuscleAtlas
+              frame={frame}
+              exercise={exercise}
+              selected={muscle}
+              onSelect={chooseMuscle}
+              onShowModel={
+                mode === 'anatomy'
+                  ? () => document.getElementById('lift-viewport')?.focus()
+                  : undefined
+              }
+            />
+            <section className="atlas-card moments-card" aria-labelledby="moment-title">
+              <h2 id="moment-title" className="rail-title">
+                <ChartSpline size={18} aria-hidden /> Momentos articulares
+              </h2>
+              <p className="rail-intro moment-intro">
+                El momento expresa el efecto de giro de las fuerzas sobre cada articulación.
+              </p>
               <MomentPanel
                 series={series}
                 frame={frame}
                 progress={task.progress}
                 curves={state.showCurves}
               />
-            }
-            popover={
-              selectedHotspot &&
-              !state.playing && (
-                <Inspector
-                  hotspot={selectedHotspot.id}
-                  label={selectedHotspot.label}
-                  setup={setup}
-                  accent={ACCENT}
-                  onChange={setParam}
-                  onClose={() => setSelected(null)}
-                />
-              )
-            }
+            </section>
+          </aside>
+        </div>
+        <footer className="atlas-footer">
+          <span>
+            <Activity size={15} aria-hidden /> Modelo biomecánico plano y cuasiestático.
+          </span>
+          <a
+            href={`${import.meta.env.BASE_URL}anatomy/creditos.html`}
+            target="_blank"
+            rel="noreferrer"
           >
-            <AnimatePresence>
-              {warnings.length > 0 && (
-                <motion.div
-                  className="warnings"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                >
-                  {warnings.map((warning) => (
-                    <p key={warning}>{warning}</p>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Only when there is something to say. The standing invitation to
-                touch the drawing was permanent furniture for a one-time lesson. */}
-            {frame.barBlocked && !selectedHotspot && (
-              <p className="figure-hint">
-                La barra está apoyada contra la tibia: no puede ir más atrás.
-              </p>
-            )}
-
-            <WorkReadout work={series.work} />
-
-            <div className="transport">
-              <button
-                className={state.playing ? 'play playing' : 'play'}
-                aria-label={state.playing ? 'Pausar' : 'Reproducir el recorrido'}
-                onClick={() => {
-                  if (!state.playing) setSelected(null)
-                  dispatch({ type: 'setPlaying', playing: !state.playing })
-                }}
-              >
-                {state.playing ? (
-                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
-                    <rect x="4" y="3" width="3" height="10" rx="1" fill="currentColor" />
-                    <rect x="9" y="3" width="3" height="10" rx="1" fill="currentColor" />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
-                    <path
-                      d="M5 3.6v8.8c0 .5.6.9 1.1.6l6.8-4.4a.7.7 0 0 0 0-1.2L6.1 3a.7.7 0 0 0-1.1.6Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                )}
-              </button>
-              <input
-                className="scrubber"
-                type="range"
-                min={Math.ceil(progressRange.min * 1000)}
-                max={Math.floor(progressRange.max * 1000)}
-                value={Math.round(task.progress * 1000)}
-                aria-label={`Posición del levantamiento — ${EXERCISE_META[exercise].taskConstraint}`}
-                onChange={(e) => {
-                  if (state.playing) dispatch({ type: 'setPlaying', playing: false })
-                  setProgress(Number(e.target.value) / 1000)
-                }}
-                style={{ '--pct': `${task.progress * 100}%` } as React.CSSProperties}
-              />
-              <span className="transport-value num">
-                {((exercise === 'deadlift' ? frame.barHeight : frame.posture.hip.y) * 100).toFixed(
-                  0,
-                )}{' '}
-                cm
-              </span>
-            </div>
-          </Figure>
-        </main>
-
-        <AnimatePresence>
-          {panelOpen && (
-            <motion.aside
-              key="settings-panel"
-              className={isDesktop ? 'side-panel' : 'mobile-panel'}
-              initial={isDesktop ? { opacity: 0, x: 28 } : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={isDesktop ? { opacity: 0, x: 20 } : { opacity: 0, y: 12 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {panels}
-            </motion.aside>
-          )}
-        </AnimatePresence>
-      </div>
+            Créditos del atlas 3D
+          </a>
+        </footer>
+      </main>
+      <SettingsDialog open={panelOpen} onClose={() => setPanelOpen(false)}>
+        {panels}
+      </SettingsDialog>
     </div>
   )
 }
 
 export default function App() {
   return (
-    <AppStateProvider>
-      <Shell />
-    </AppStateProvider>
+    <MotionConfig reducedMotion="user">
+      <AppStateProvider>
+        <Shell />
+      </AppStateProvider>
+    </MotionConfig>
   )
 }
