@@ -392,7 +392,9 @@ export function useShareLink() {
         await navigator.share({ title: 'Palanca', url })
         return 'shared'
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
+        if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+          return 'cancelled'
+        }
       }
     }
     try {
