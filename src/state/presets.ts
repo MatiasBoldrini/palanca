@@ -29,7 +29,7 @@ export const DEADLIFT_PRESETS: Preset[] = [
   {
     id: 'neutral',
     name: 'Columna neutra',
-    blurb: 'La curva de pie intacta: lordosis lumbar y cifosis dorsal, sin flexión agregada.',
+    blurb: 'Referencia erguida del modelo, con 0° de flexión agregada.',
     coordination: { kneeTravel: 0.25, spineFlexion: 0, armLean: 0, barOffset: 0 },
   },
   {

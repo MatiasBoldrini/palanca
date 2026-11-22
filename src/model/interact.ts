@@ -7,7 +7,9 @@
  * the model for a posture it would have to fake.
  */
 
-import type { Anthropometry } from './anthropometry'
+import { heightFromSegments, type Anthropometry } from './anthropometry'
+import { getStance, stanceWidthRange, TOE_OUT_RANGE } from './stance'
+import { SQUAT_ELBOW_TURN } from './posture'
 import { type Vec2, clamp } from './geometry'
 import {
   type Coordination,
@@ -28,6 +30,7 @@ export type HotspotId =
   | 'shank'
   | 'thigh'
   | 'arm'
+  | 'ankle'
 
 export interface Hotspot {
   id: HotspotId
@@ -45,6 +48,9 @@ export interface Hotspot {
 }
 
 export type ParamId =
+  | 'toeOutDeg'
+  | 'stanceWidth'
+  | 'squatElbowAngle'
   | 'progress'
   | 'load'
   | 'cop'
@@ -89,6 +95,7 @@ const HOTSPOT_LABEL: Record<HotspotId, string> = {
   shank: 'Tibia',
   thigh: 'Fémur',
   arm: 'Brazo',
+  ankle: 'Tobillo',
 }
 
 /**
@@ -130,37 +137,27 @@ export function hotspotsFor(exercise: ExerciseId, frame: Frame, includeCop: bool
   ]
 }
 
-/**
- * Which parameters each part of the drawing stands for, in display order.
- *
- * Load and height along the lift stay out of the bar popup: load lives in the
- * settings panel, and the transport scrubber already owns progress.
- */
-export function paramsFor(hotspot: HotspotId, exercise: ExerciseId): ParamId[] {
-  switch (hotspot) {
-    case 'bar':
-      return exercise === 'squat' ? ['barOffset'] : []
-    case 'knee':
-      return ['kneeTravel']
-    case 'spine':
-      return ['spineFlexion', 'torso']
-    case 'hip':
-      return ['depth']
-    case 'cop':
-      return ['cop']
-    case 'foot':
-      return []
-    case 'shank':
-      return ['shank']
-    case 'thigh':
-      return ['thigh']
-    case 'arm':
-      return exercise === 'deadlift' ? ['arm', 'armLean'] : ['arm']
+/** The atlas also exposes load on the plates, foot length and ankle mobility. */
+export function editableHotspotsFor(exercise: ExerciseId, frame: Frame): Hotspot[] {
+  const spots = hotspotsFor(exercise, frame, true)
+  const p = frame.posture
+  function add(id: HotspotId, point: Vec2) {
+    spots.push({ id, point, label: HOTSPOT_LABEL[id] })
   }
+  if (exercise === 'deadlift') {
+    add('bar', p.bar)
+    add('hip', p.hip)
+  }
+  add('ankle', p.ankle)
+  add('foot', { x: (p.heel.x + 3 * p.toe.x) / 4, y: p.toe.y })
+  return spots
 }
 
 /** Outer bounds, before the solver gets a say. */
-const PARAM_LIMITS: Record<ParamId, Range> = {
+export const PARAM_LIMITS: Record<ParamId, Range> = {
+  toeOutDeg: TOE_OUT_RANGE,
+  squatElbowAngle: SQUAT_ELBOW_TURN,
+  stanceWidth: { min: 0, max: 1.5 }, // Tightened to the available leg lengths below.
   progress: { min: 0, max: 1 },
   load: { min: 20, max: 400 },
   cop: { min: -0.06, max: 0.06 },
@@ -182,6 +179,12 @@ const PARAM_LIMITS: Record<ParamId, Range> = {
 
 export function paramValue(id: ParamId, setup: Setup): number {
   switch (id) {
+    case 'stanceWidth':
+      return getStance(setup.exercise, setup.anthro, setup.coordination).width
+    case 'toeOutDeg':
+      return getStance(setup.exercise, setup.anthro, setup.coordination).toeOut
+    case 'squatElbowAngle':
+      return setup.coordination.squatElbowAngle ?? 0
     case 'progress':
       return setup.task.progress
     case 'load':
@@ -213,6 +216,10 @@ export function paramValue(id: ParamId, setup: Setup): number {
  */
 export function patchFor(id: ParamId, value: number): SetupPatch {
   switch (id) {
+    case 'stanceWidth':
+    case 'toeOutDeg':
+    case 'squatElbowAngle':
+      return { coordination: { [id]: value } }
     case 'progress':
       return { task: { progress: value } }
     case 'load':
@@ -238,10 +245,12 @@ export function patchFor(id: ParamId, value: number): SetupPatch {
   }
 }
 
-function withPatch(setup: Setup, patch: SetupPatch): Setup {
+export function withSetupPatch(setup: Setup, patch: SetupPatch): Setup {
+  const anthro = patch.anthro ? { ...setup.anthro, ...patch.anthro } : setup.anthro
+  if (patch.anthro) anthro.height = heightFromSegments(anthro)
   return {
     ...setup,
-    anthro: patch.anthro ? { ...setup.anthro, ...patch.anthro } : setup.anthro,
+    anthro,
     task: patch.task ? { ...setup.task, ...patch.task } : setup.task,
     coordination: patch.coordination
       ? { ...setup.coordination, ...patch.coordination }
@@ -250,7 +259,7 @@ function withPatch(setup: Setup, patch: SetupPatch): Setup {
 }
 
 function poseExists(setup: Setup, id: ParamId, value: number): boolean {
-  const s = withPatch(setup, patchFor(id, value))
+  const s = withSetupPatch(setup, patchFor(id, value))
   return solveFrame(s.exercise, s.anthro, s.task, s.coordination).feasible
 }
 
@@ -261,6 +270,7 @@ function poseExists(setup: Setup, id: ParamId, value: number): boolean {
  * of the bar-position control where the solver silently clamps.
  */
 function outerBounds(id: ParamId, setup: Setup): Range {
+  if (id === 'stanceWidth') return stanceWidthRange(setup.exercise, setup.anthro, setup.coordination.deadliftStyle)
   const base = PARAM_LIMITS[id]
   if (id !== 'barPosition' || setup.exercise !== 'deadlift') return base
   const shin = deadliftBarLimit(setup.anthro, setup.task, setup.coordination)
@@ -279,6 +289,31 @@ function edge(from: number, to: number, works: (v: number) => boolean): number {
   return good
 }
 
+/** Recover the closest reachable height after a change to body, load or exercise. */
+export function nearestFeasibleProgress(setup: Setup): number | null {
+  const here = clamp(setup.task.progress, 0, 1)
+  const works = (value: number) => poseExists(setup, 'progress', value)
+  if (works(here)) return here
+
+  // Search on both sides before choosing an edge. This runs only when a setup
+  // change invalidated the old height, never in a healthy playback loop.
+  const samples = 100
+  let previousLow = here
+  let previousHigh = here
+  for (let i = 1; i <= samples; i++) {
+    const distance = i / samples
+    const below = Math.max(0, here - distance)
+    const above = Math.min(1, here + distance)
+    const low = below < previousLow && works(below) ? edge(below, previousLow, works) : null
+    const high = above > previousHigh && works(above) ? edge(above, previousHigh, works) : null
+    if (low !== null && high !== null) return here - low <= high - here ? low : high
+    if (low !== null || high !== null) return low ?? high
+    previousLow = below
+    previousHigh = above
+  }
+  return null
+}
+
 const STEPS = 10
 
 /**
@@ -292,9 +327,14 @@ export function feasibleRange(id: ParamId, setup: Setup): Range {
   if (bounds.max - bounds.min < 1e-9) return bounds
 
   const works = (v: number) => poseExists(setup, id, v)
-  const here = clamp(paramValue(id, setup), bounds.min, bounds.max)
-  // A setup that is already impossible would otherwise freeze every control.
-  if (!works(here)) return bounds
+  let here = clamp(paramValue(id, setup), bounds.min, bounds.max)
+  if (!works(here)) {
+    // Keep the body controls available to recover from an impossible setup.
+    if (id !== 'progress') return bounds
+    const recovery = nearestFeasibleProgress(setup)
+    if (recovery === null) return { min: here, max: here }
+    here = recovery
+  }
 
   const step = (bounds.max - bounds.min) / STEPS
   const walk = (direction: 1 | -1, stop: number): number => {

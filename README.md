@@ -1,35 +1,43 @@
 # Palanca
 
-Simulador interactivo de la mecánica del **peso muerto** y la **sentadilla**. Tocás la figura, ajustás postura o proporciones, y ves en el mismo dibujo dónde cae la carga en cada articulación.
+Laboratorio interactivo de **peso muerto, press de banca y sentadilla**. Cambiá la apertura de los pies, el agarre o las proporciones del cuerpo y seguí en 3D cómo se modifican la postura, el recorrido de la barra y los momentos articulares.
 
-Corre entero en el navegador: sin backend.
+![Peso muerto sumo en el despegue, con la comparación frente al convencional](docs/sumo.png)
 
-![Peso muerto](docs/peso-muerto.png)
+## Explorar un levantamiento
 
-![Sentadilla](docs/sentadilla.png)
+1. Tocá el nombre del ejercicio para elegir **Peso muerto**, **Press de banca** o **Sentadilla**. Debajo del cuerpo 3D, reproducí el movimiento o arrastrá el deslizador para detenerte en un punto del recorrido. Los tres puntos junto al recorrido te llevan a una fase exacta y permiten activar la cámara lenta.
+2. En **Peso muerto**, elegí **Despegue** desde los tres puntos. Tocá **Convencional** o **Sumo** debajo del recorrido para cambiar la postura. En **Sentadilla**, probá **Fondo** con **Base media** y **Base amplia**. Para ajustar la separación de los pies en cualquiera de los dos ejercicios, tocá el valor en centímetros junto a las variantes. Activá **Fuerzas y momentos** y abrí **Posturas** para comparar las palancas en el mismo porcentaje de cada recorrido. Desde ahí podés ver la otra variante en el modelo 3D.
+3. En **Press de banca**, elegí **Pecho** y mové el deslizador **Agarre** debajo del recorrido para variar la distancia entre las manos. Desde **Cámara**, mirá desde los pies para ver cómo queda cada mano respecto del hombro. Con **Fuerzas y momentos** activo, **Articulaciones** muestra los momentos de hombro, codo y muñeca por brazo.
+4. Al activar **Fuerzas y momentos** aparecen las flechas sobre el cuerpo. Leelas desde el punto de contacto hasta la punta. **Leer las fuerzas** permite aislar la barra, el cuerpo o los apoyos. Desde **Herramientas** podés cambiar entre el reparto por contacto y las fuerzas externas sobre el conjunto de cuerpo y barra.
+5. Tocá el fémur en el cuerpo 3D para pausar y abrir su editor. Elegí **Rotación**, **Posición** o **Largo** y mové el deslizador. El segmento queda marcado mientras las articulaciones acompañan el cambio. Podés tocar otra pieza, elegirla en **Parte del cuerpo** o activar **Ver fuerzas**. **Terminar ajuste** cierra el editor y conserva la postura.
+6. En el celu, deslizá horizontalmente sobre la figura para girarla o usá dos dedos para acercarla. En **Herramientas** podés elegir la capa de músculos o esqueleto y abrir **Ajustes** para compartir la postura. Para cambiar los kilos, elegí **Herramientas → Carga de la barra**.
 
-## Qué hace
+![Press de banca con las fuerzas y momentos sobre la anatomía](docs/banca.png)
 
-- Resuelve el equilibrio del sistema cuerpo + barra (modelo plano, cuasi-estático).
-- Muestra momentos articulares y el trabajo del levantamiento.
-- Colorea el esqueleto según la demanda (mapa de carga).
-- Permite scrubear el recorrido y comparar patrones (cadera dominante, low bar, etc.).
+## Cómo interpretar los valores
 
-## Cómo se usa
+El modelo equilibra cada postura con fuerzas verticales y expresa la demanda interna en N·m. En peso muerto y sentadilla, los momentos de cadera, rodilla y tobillo corresponden a una pierna. L5/S1 corresponde al tronco completo. Seleccionar una articulación muestra la contribución de la barra y de los segmentos corporales. En el despegue del peso muerto, las manos sostienen toda la carga.
 
-1. Elegí **Peso muerto** o **Sentadilla**.
-2. Tocá una parte del dibujo (rodilla, barra, tibia…) para ajustar.
-3. Reproducí o arrastrá el scrubber para ver el recorrido.
-4. Abrí el engranaje para carga, cuerpo y opciones de vista.
+En banca cada mano sostiene la mitad del peso de la barra. El modelo usa un apoyo vertical equivalente bajo los hombros y otro entre los pies. Las mediciones de un press real también incluyen aceleración y fuerzas horizontales que varían con el agarre. [Larsen y colaboradores (2021)](https://pubmed.ncbi.nlm.nih.gov/33554113/)
 
-## Desarrollo
+La apertura se mide entre los centros de los pies. El modelo gira los pies hacia afuera y modifica la posición lateral de las rodillas y la longitud proyectada de los segmentos. Calcula las palancas de perfil y supone apoyo simétrico. En una persona también intervienen fuerzas laterales y momentos en otros planos. Para contrastar estas simplificaciones con mediciones experimentales, ver los estudios sobre [peso muerto convencional y sumo](https://pubmed.ncbi.nlm.nih.gov/10912892/) y [distintas aperturas en sentadilla](https://pubmed.ncbi.nlm.nih.gov/30026952/).
 
-```bash
-npm install
+El atlas permite seleccionar un grupo para estudiar su función durante el movimiento. El color anatómico se mantiene durante la repetición. Las mallas se sirven junto con la aplicación. El visor usa WebGL para dibujar los tres ejercicios. [Fuentes y licencias del atlas](public/anatomy/creditos.html)
+
+![Sentadilla con la palanca de la rodilla](docs/sentadilla.png)
+
+## Desarrollo y verificación
+
+```sh
+npm ci
 npm run dev
 ```
 
-```bash
+```sh
 npm run build
-npm run test
+npm test
+npm run audit:motion
 ```
+
+La [auditoría de animaciones](docs/auditoria-animaciones.md) reúne los problemas corregidos, los recorridos evaluados y los controles probados en el navegador.

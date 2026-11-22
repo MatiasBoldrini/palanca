@@ -1,0 +1,150 @@
+.stance-controls {
+  display: grid;
+  grid-template-columns: max-content auto;
+  column-gap: 8px;
+  align-items: center;
+}
+.stance-choices {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stance-choices button,
+.stance-width-trigger {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 4px;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stance-choices button[aria-pressed='true'] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.stance-width-trigger {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stance-width-trigger[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.stance-controls:has(.stance-width-trigger[aria-expanded='true']) {
+  width: min(100%, 360px);
+}
+.stance-width-panel:not([hidden]) {
+  --accent-local: var(--ink);
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.stance-width-panel input[type='range'] {
+  min-width: 0;
+  height: 44px;
+}
+.stance-width-panel span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (max-width: 359px) {
+  .stance-controls,
+  .stance-choices {
+    column-gap: 2px;
+  }
+  .stance-choices button,
+  .stance-width-trigger {
+    font-size: 13px;
+  }
+}
+
+.stance-measurements {
+  border-block: 1px solid var(--rule);
+}
+.stance-measurements[open] {
+  padding-bottom: 10px;
+}
+.stance-measurements summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+.stance-measurements summary::-webkit-details-marker {
+  display: none;
+}
+.stance-measurements:not([open]) .stance-measures-hide,
+.stance-measurements[open] .stance-measures-show {
+  display: none;
+}
+.stance-comparison .study-joints button {
+  min-height: 36px;
+}
+
+@media (pointer: coarse) {
+  .stance-comparison .study-joints button {
+    min-height: 44px;
+  }
+}
+.stance-presets {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+.stance-presets button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.stance-presets button[aria-pressed='true'] {
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stance-lever-title {
+  margin-block: 12px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stance-levers {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+.stance-levers dt {
+  font-size: 13px;
+}
+.stance-levers dd {
+  margin: 0;
+  font: 500 22px var(--headline);
+  font-variant-numeric: tabular-nums;
+}
+.apply-stance {
+  margin-bottom: 8px;
+  min-height: 44px;
+  color: var(--muscle-ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

@@ -1,0 +1,617 @@
+/* Warm paper and graphite keep the anatomy and the measured joint curves visually distinct. */
+:root {
+  --paper: #f6f5f1;
+  --card: #fffefa;
+  --ink: #242a27;
+  --muted: #606861;
+  --rule: #dadcd5;
+  --soft: #edece6;
+  --muscle-ink: #a84532;
+  --swatch: #f1eae0;
+  --bg: var(--paper);
+  --bg-raise: var(--card);
+  --surface-solid: var(--card);
+  --stage: var(--card);
+  --figure-halo: var(--card);
+  --text: var(--ink);
+  --text-2: var(--muted);
+  --text-3: #666c65;
+  --accent: #a54431;
+  --headline: 'Baskervville', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1e1c;
+    --card: #222724;
+    --ink: #f1f0e9;
+    --muted: #bac1b9;
+    --rule: #3e443e;
+    --soft: #303630;
+    --swatch: #403b34;
+    --muscle-ink: #db8b72;
+    --text-3: #aab0a9;
+    --accent: #e19a81;
+  }
+}
+body {
+  background: var(--paper);
+}
+.atlas-app {
+  min-height: 100dvh;
+}
+.atlas-app :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.atlas-header {
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+.atlas-header-inner,
+.atlas-main {
+  width: min(1384px, 100%);
+  margin-inline: auto;
+  padding-inline: clamp(18px, 4.1vw, 70px);
+}
+.atlas-header-inner {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+}
+.atlas-header nav {
+  justify-self: center;
+}
+.atlas-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.atlas-brand strong {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.055em;
+}
+.atlas-brand > span {
+  margin-left: 5px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--muted);
+}
+.atlas-header .segmented {
+  background: var(--soft);
+  padding: 3px;
+}
+.atlas-header .segment {
+  flex: 1 0 auto;
+  padding: 7px 20px;
+  font-size: 13px;
+}
+.atlas-header .segment-pill {
+  background: var(--card);
+  box-shadow: 0 1px 4px #19251d25;
+}
+.settings-open,
+.atlas-speed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 570;
+}
+.settings-open {
+  justify-self: end;
+  padding: 8px 13px;
+}
+.settings-open:hover,
+.atlas-speed:hover,
+.settings-title button:hover {
+  background: var(--soft);
+}
+.exercise-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-block: clamp(22px, 4vh, 45px) clamp(18px, 3vh, 32px);
+}
+.exercise-head h1 {
+  font-family: var(--headline);
+  font-size: clamp(42px, 4.5vw, 68px);
+  line-height: 1.04;
+  letter-spacing: -0.048em;
+  font-weight: 500;
+}
+.exercise-head p {
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.atlas-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(285px, 26vw, 345px);
+  gap: clamp(14px, 1.7vw, 24px);
+  align-items: start;
+}
+.lift-column {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+.atlas-card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 13px;
+}
+.viewer-card {
+  overflow: hidden;
+}
+.atlas-viewport {
+  position: relative;
+  display: flex;
+  height: clamp(410px, 52dvh, 620px);
+  width: 100%;
+  isolation: isolate;
+}
+.atlas-viewport.anatomy {
+  background: #f8f6f0;
+}
+.viewer-loading {
+  margin: auto;
+  color: #65675f;
+  font-size: 14px;
+}
+.model-warnings {
+  padding: 0 20px 10px;
+  color: var(--muscle-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.lift-transport {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 15px clamp(14px, 2vw, 26px);
+  border-top: 1px solid var(--rule);
+}
+.atlas-play {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--card);
+  flex: none;
+}
+.atlas-play:hover {
+  background: var(--muscle-ink);
+}
+.atlas-play:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.timeline {
+  flex: 1;
+  min-width: 0;
+}
+.timeline-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.timeline-head strong {
+  font-size: 13px;
+  font-weight: 620;
+}
+.timeline-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.timeline input {
+  height: 24px;
+  display: block;
+}
+.atlas-speed {
+  min-width: 39px;
+  height: 30px;
+}
+.atlas-speed[aria-pressed='true'] {
+  color: var(--muscle-ink);
+  border-color: currentColor;
+}
+.pose-readings {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 18px 0;
+}
+.pose-readings div {
+  padding: 0 clamp(12px, 2vw, 30px);
+}
+.pose-readings div + div {
+  border-left: 1px solid var(--rule);
+}
+.pose-readings dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.pose-readings dd {
+  margin: 5px 0 0;
+  font-size: clamp(23px, 2.1vw, 34px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 540;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+.pose-readings dd small {
+  color: var(--muted);
+  font-size: 0.72em;
+}
+.muscle-atlas,
+.moments-card {
+  padding: 18px 19px 13px;
+}
+.rail-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--headline);
+  font-size: 24px;
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+  font-weight: 550;
+}
+.rail-title svg {
+  color: var(--muscle-ink);
+  stroke-width: 1.6;
+}
+.rail-intro,
+.muscle-detail > p,
+.observe p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.rail-intro {
+  margin: 9px 0 12px;
+}
+.muscle-list {
+  border-top: 1px solid var(--rule);
+}
+.muscle-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 16px;
+  gap: 11px;
+  align-items: center;
+  text-align: left;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.muscle-row:hover {
+  background: var(--soft);
+}
+.muscle-row > span {
+  display: grid;
+  gap: 1px;
+}
+.muscle-row strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.muscle-row small,
+.muscle-identity p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.muscle-row > svg:last-child {
+  color: var(--muted);
+}
+.more-muscles,
+.atlas-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muscle-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.more-muscles {
+  padding: 11px 0 2px;
+}
+.more-muscles[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.atlas-back {
+  margin: 12px 0;
+}
+.muscle-identity {
+  margin-bottom: 12px;
+}
+.muscle-identity h3 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.observe {
+  border-left: 2px solid var(--muscle-ink);
+  padding-left: 11px;
+  margin: 16px 0 5px;
+}
+.observe strong {
+  font-size: 13px;
+}
+.observe p {
+  margin-top: 2px;
+}
+.moments-card .moment-panel {
+  margin-top: 12px;
+  gap: 0;
+}
+.moments-card .moment-chart {
+  display: grid;
+  grid-template-columns: minmax(74px, 1fr) minmax(50px, 0.85fr) auto;
+  grid-template-areas: 'name chart value';
+  gap: 5px;
+  align-items: center;
+  min-height: 32px;
+  border-bottom: 1px solid var(--rule);
+}
+.moments-card .moment-chart span {
+  font-size: 12px;
+  font-weight: 520;
+}
+.moments-card .moment-label {
+  grid-area: name;
+}
+.moments-card .moment-value {
+  grid-area: value;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.moments-card .moment-chart svg {
+  grid-area: chart;
+  width: 100%;
+  max-width: 92px;
+  max-height: 24px;
+}
+.moment-note {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 9px;
+  color: var(--muted);
+}
+.atlas-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin: 19px 0 25px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--muted);
+}
+.atlas-footer span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.atlas-footer a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.settings-dialog {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(450px, 100%);
+  height: 100dvh;
+  max-height: 100dvh;
+  max-width: 100%;
+  padding: 0;
+  margin: 0 0 0 auto;
+  border: none;
+  border-left: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+}
+.settings-dialog::backdrop {
+  background: #18211d66;
+}
+.settings-dialog[open] {
+  animation: settings-in 180ms var(--ease-out);
+}
+@keyframes settings-in {
+  from {
+    transform: translateX(18px);
+    opacity: 0.4;
+  }
+}
+.settings-inner {
+  padding: 0 24px 30px;
+}
+.settings-title {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.settings-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+}
+.settings-title button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+html:has(.settings-dialog[open]) {
+  overflow: hidden;
+}
+@media (max-width: 1060px) {
+  .atlas-brand > span {
+    display: none;
+  }
+}
+@media (max-width: 790px) {
+  .atlas-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .atlas-viewport {
+    height: clamp(355px, 54dvh, 560px);
+  }
+}
+@media (max-width: 600px) {
+  .atlas-header-inner {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding-block: 10px;
+  }
+  .atlas-header nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+  .settings-open {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .atlas-header .segment {
+    padding: 7px;
+  }
+  .atlas-brand {
+    gap: 7px;
+  }
+  .atlas-brand img {
+    width: 27px;
+    height: 27px;
+  }
+  .atlas-header-inner,
+  .atlas-main {
+    padding-inline: 14px;
+  }
+  .exercise-head {
+    padding-block: 17px;
+    align-items: flex-start;
+  }
+  .exercise-head h1 {
+    font-size: 41px;
+  }
+  .exercise-head p {
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .atlas-viewport {
+    height: clamp(330px, 47dvh, 490px);
+  }
+  .lift-transport {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .atlas-play {
+    width: 36px;
+    height: 36px;
+  }
+  .pose-readings {
+    padding: 13px 0;
+  }
+  .pose-readings dt {
+    font-size: 12px;
+  }
+  .atlas-footer {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+}
+@media (max-width: 365px) {
+  .atlas-main {
+    padding-inline: 9px;
+  }
+}
+.model-hint {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6d6a5f;
+  font-size: 12px;
+  pointer-events: none;
+}
+.model-hint button {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  border: 1px solid #d5c9bb;
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #fffdf7;
+  color: #8e402e;
+  font-weight: 620;
+  pointer-events: auto;
+}
+.model-hint button span {
+  font-size: 11px;
+  font-weight: 450;
+  text-decoration: underline;
+}
+.return-model {
+  display: none;
+}
+.settings-inner a {
+  color: var(--muscle-ink);
+}
+@media (max-width: 790px) {
+  .return-model {
+    display: inline-block;
+    color: var(--muscle-ink);
+    font-size: 13px;
+    margin-top: 7px;
+    text-decoration: underline;
+  }
+}
+.muscle-reading {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+}
+.muscle-reading > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px;
+  border-top: 1px solid var(--rule);
+  padding-top: 5px;
+}
+.muscle-reading dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.muscle-reading dd {
+  color: var(--ink);
+  margin: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 620;
+}

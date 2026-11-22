@@ -1,0 +1,146 @@
+.anatomy-viewer {
+  --camera-rail-height: 44px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #f8f6f0;
+  color-scheme: light;
+}
+
+/* Study labels and editing handles keep the lower corner clear for the camera. */
+.anatomy-viewer.movement-view:not(.editing-body) {
+  --camera-rail-height: 0px;
+}
+.anatomy-viewer.movement-view:not(.edit-forces) :is(.load-path-drawing, .mechanics-overlay) {
+  display: none;
+}
+.anatomy-surface {
+  position: absolute;
+  inset: 0 0 var(--camera-rail-height);
+}
+
+.anatomy-surface canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.anatomy-surface canvas:active {
+  cursor: grabbing;
+}
+.anatomy-surface canvas:focus-visible {
+  outline: 2px solid #786f5f;
+  outline-offset: -3px;
+}
+
+.anatomy-loading {
+  position: absolute;
+  inset: 46% 0 auto;
+  text-align: center;
+  color: #746c5e;
+  font-size: 13px;
+}
+
+.control-disclosure.camera-menu {
+  position: absolute;
+  z-index: 3;
+  right: 8px;
+  bottom: 0;
+  color: #524d42;
+}
+.camera-menu.control-disclosure > summary {
+  padding-inline: 8px;
+  color: #524d42;
+  font-size: 12px;
+  font-weight: 550;
+}
+.camera-menu.control-disclosure summary:hover,
+.camera-menu.control-disclosure[open] summary {
+  color: #282a25;
+}
+.camera-menu > .control-menu {
+  top: auto;
+  bottom: 100%;
+  width: max-content;
+  padding: 2px 4px;
+  border-color: #d6d1c5;
+  background: #fbfaf6;
+  color: #524d42;
+}
+.anatomy-camera {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.anatomy-camera-view {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 6px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.anatomy-camera-view select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  min-height: 44px;
+  padding: 0 14px 0 0;
+  border-radius: 3px;
+}
+
+.anatomy-camera-view > svg:last-child {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+}
+
+.anatomy-camera-rule {
+  margin: 0 3px;
+  width: 1px;
+  height: 14px;
+  background: #d8d4c8;
+}
+
+.anatomy-camera button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.anatomy-camera button:hover:enabled {
+  background: #ede9de;
+}
+.anatomy-camera button:disabled {
+  opacity: 0.36;
+  cursor: default;
+}
+.anatomy-camera :is(button, select):focus-visible {
+  outline: 2px solid #786f5f;
+}
+
+.anatomy-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

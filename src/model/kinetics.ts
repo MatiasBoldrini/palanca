@@ -27,7 +27,7 @@ export type JointKey = 'ankle' | 'knee' | 'hip' | 'l5s1'
  * in the inverse-dynamics literature we validate against. L5/S1 is a single
  * midline joint and carries the whole load.
  */
-const LIMB_SHARE: Record<JointKey, number> = { ankle: 0.5, knee: 0.5, hip: 0.5, l5s1: 1 }
+export const LIMB_SHARE: Record<JointKey, number> = { ankle: 0.5, knee: 0.5, hip: 0.5, l5s1: 1 }
 
 /**
  * Sign applied so that a positive number always means "the muscles spanning
@@ -35,7 +35,7 @@ const LIMB_SHARE: Record<JointKey, number> = { ankle: 0.5, knee: 0.5, hip: 0.5, 
  * top-down sum has the opposite meaning at the knee, because the thigh
  * extends backwards from it.
  */
-const EXTENSOR_SIGN: Record<JointKey, number> = { ankle: 1, knee: -1, hip: 1, l5s1: 1 }
+export const EXTENSOR_SIGN: Record<JointKey, number> = { ankle: 1, knee: -1, hip: 1, l5s1: 1 }
 
 export interface Kinetics {
   /** Net extensor demand, N.m. Negative means the joint needs flexor torque. */
@@ -66,7 +66,7 @@ export interface Kinetics {
   systemWeight: number
 }
 
-const JOINT_POINT: Record<JointKey, (p: Posture) => Vec2> = {
+export const JOINT_POINT: Record<JointKey, (p: Posture) => Vec2> = {
   ankle: (p) => p.ankle,
   knee: (p) => p.knee,
   hip: (p) => p.hip,
@@ -140,11 +140,9 @@ export function computeKinetics(
     Math.abs(moment.hip) > 1e-6 ? Math.abs(moment.knee) / Math.abs(moment.hip) : 0
 
   /*
-   * A hanging bar can only push the hand upwards: whatever horizontal offset
-   * there is between the shoulder and the bar has to be held by the shoulder
-   * itself. So the arm hanging vertical is not an accident of technique, it is
-   * the only free way to hold a load, and this is the price of departing from
-   * it. Split per shoulder, like the other paired joints.
+   * The hanging bar pulls down on each hand. The shoulder balances the moment
+   * of that force plus the weight of the arm about the shoulder joint.
+   * Split per shoulder, like the other paired joints.
    */
   const arms = byKey.get('arms')
   const shoulderMomentArm = armsCarryLoad ? posture.shoulder.x - posture.bar.x : 0

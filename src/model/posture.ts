@@ -241,7 +241,7 @@ export function footPoints(a: Anthropometry) {
 }
 
 /** Point masses for the whole body, in kilograms, at their current positions. */
-export function bodyMassPoints(p: Posture, a: Anthropometry): MassPoint[] {
+export function bodyMassPoints(p: Posture, a: Anthropometry, upperArmFraction?: number): MassPoint[] {
   const m = a.mass
   return [
     { key: 'feet', position: lerpVec(p.ankle, p.toe, 0.5), mass: SEGMENT_MASS.feet * m },
@@ -279,7 +279,7 @@ export function bodyMassPoints(p: Posture, a: Anthropometry): MassPoint[] {
       mass: SEGMENT_MASS.thorax * m,
     },
     { key: 'headNeck', position: p.headCom, mass: SEGMENT_MASS.headNeck * m },
-    { key: 'arms', position: armCentre(p), mass: SEGMENT_MASS.arms * m },
+    { key: 'arms', position: armCentre(p, upperArmFraction), mass: SEGMENT_MASS.arms * m },
   ]
 }
 
@@ -288,13 +288,12 @@ export function bodyMassPoints(p: Posture, a: Anthropometry): MassPoint[] {
  * the bent path matters in the squat, where the hands sit next to the
  * shoulders but the arms hang out behind them.
  */
-function armCentre(p: Posture): Vec2 {
-  const upper = dist(p.shoulder, p.elbow)
-  const fore = dist(p.elbow, p.hand)
+function armCentre(p: Posture, upperArmFraction?: number): Vec2 {
+  const upper = upperArmFraction ?? dist(p.shoulder, p.elbow)
+  const fore = upperArmFraction === undefined ? dist(p.elbow, p.hand) : 1 - upperArmFraction
+  // For a bent arm, use fractions of the actual 3D links before projecting the mass point.
   const target = (upper + fore) * SEGMENT_COM.arm
-  if (target <= upper) {
-    return lerpVec(p.shoulder, p.elbow, upper > 0 ? target / upper : 0)
-  }
+  if (target <= upper) return lerpVec(p.shoulder, p.elbow, upper > 0 ? target / upper : 0)
   return lerpVec(p.elbow, p.hand, fore > 0 ? (target - upper) / fore : 0)
 }
 
@@ -376,6 +375,7 @@ export function elbowFor(shoulder: Vec2, hand: Vec2): Vec2 {
  * out to the side, so only part of the humerus projects onto the sagittal
  * plane: drawing its full length would send the arm clean through the torso.
  */
+export const SQUAT_ELBOW_TURN = { min: -40, max: 40 } as const
 const SQUAT_ELBOW_PROJECTION = { alongTrunk: 0.55, posterior: 0.3 } as const
 
 export function squatElbow(shoulder: Vec2, hip: Vec2, a: Anthropometry): Vec2 {

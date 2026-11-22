@@ -64,7 +64,7 @@ export function PatternPanel({ accent }: { accent: string }) {
           accent={accent}
           format={deg}
           onChange={(v) => dispatch({ type: 'setCoordination', patch: { spineFlexion: v } })}
-          hint="0° es la curva natural: lordosis lumbar y cifosis dorsal. Los grados se suman sobre eso — primero se va la lordosis, después redondea la espalda alta."
+          hint="0° es la referencia neutra del modelo. Al aumentar la flexión, la curva crece primero en la zona lumbar y luego en la espalda alta."
         />
         {state.exercise === 'deadlift' && (
           <Slider
@@ -84,7 +84,7 @@ export function PatternPanel({ accent }: { accent: string }) {
               { at: 0, label: 'tensor' },
               { at: 15, label: 'hombro adelante' },
             ]}
-            hint="En 0 el brazo cuelga vertical y no aguanta nada más que tracción, que es lo que pasa con cargas altas. Cada grado adelanta el hombro respecto de la barra y aparece un momento de hombro: la barra sólo puede empujar la mano hacia arriba, así que ese desfase lo sostienen dorsales y hombro posterior."
+            hint="En 0 el brazo cuelga vertical y no aguanta nada más que tracción, que es lo que pasa con cargas altas. Cada grado adelanta el hombro respecto de la barra y aparece un momento de hombro: la barra tira de la mano hacia abajo y aumenta la palanca respecto del hombro."
           />
         )}
         {state.exercise === 'squat' && (
@@ -205,17 +205,17 @@ export function TaskPanel() {
   return (
     <Section title="Tarea">
       <Slider
+        id="settings-load"
         label="Carga en la barra"
-        value={Math.round(task.load)}
+        value={task.load}
         min={20}
         max={400}
         step={2.5}
-        format={(v) => `${v} kg`}
+        format={(v) => `${v.toLocaleString('es-AR')} kg`}
         onChange={(v) => dispatch({ type: 'setTask', patch: { load: v } })}
       />
       <p className="caption" style={{ marginTop: 4 }}>
-        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo. Tocá el
-        triángulo bajo el pie para moverlo.
+        El modelo ubica la barra para equilibrar el sistema sobre el punto de apoyo.
       </p>
 
       <Collapsible title="Ajuste numérico">
@@ -254,30 +254,12 @@ export function TaskPanel() {
 export function ViewPanel() {
   const { state, dispatch } = useApp()
   return (
-    <Section title="Vista">
-      <Switch
-        checked={state.showLoadMap}
-        onChange={() => dispatch({ type: 'toggle', key: 'showLoadMap' })}
-        label="Mapa de carga"
-        hint="Colorea el esqueleto con gradientes cortos en cada articulación: oro apagado es poco, ladrillo es más, rojo oscuro es la que más momento aguanta en esta pose. El medio del segmento vuelve a tinta, para que no se pinte el cuerpo entero. Se mide contra la articulación más exigida del instante."
-      />
+    <Section title="Gráficos de momentos">
       <Switch
         checked={state.showCurves}
         onChange={() => dispatch({ type: 'toggle', key: 'showCurves' })}
         label="Curvas del recorrido"
-        hint="El momento de las cuatro articulaciones a lo largo del levantamiento, sobre el mismo eje que la barra de posición."
-      />
-      <Switch
-        checked={state.showMomentArms}
-        onChange={() => dispatch({ type: 'toggle', key: 'showMomentArms' })}
-        label="Brazos de palanca"
-        hint="La distancia horizontal de cada articulación a la línea de la barra, acotada en centímetros."
-      />
-      <Switch
-        checked={state.showComGuides}
-        onChange={() => dispatch({ type: 'toggle', key: 'showComGuides' })}
-        label="Centro de masa y punto de apoyo"
-        hint="Marca dónde cae la línea de gravedad del conjunto cuerpo más barra."
+        hint="Muestra cómo cambia cada momento articular del fondo a la extensión. El punto indica la posición actual."
       />
     </Section>
   )
@@ -289,10 +271,10 @@ export function ModelNotes() {
     <Section title="Qué asume este modelo">
       <ul className="notes">
         <li>
-          Es un modelo <strong>plano y cuasi-estático</strong>: resuelve el equilibrio instante a
-          instante, sin velocidad ni inercia. Sirve para peso muerto convencional y sentadilla con
-          stance estrecho o medio. Para sumo o stance ancho, Escamilla midió errores de 16 a 18 cm en
-          los brazos de palanca al analizar en 2D.
+          La apertura de pies cambia la postura en tres dimensiones. El modelo calcula el
+          equilibrio con fuerzas verticales y muestra los <strong>momentos en el plano
+          sagital</strong>, visibles de perfil. El giro de los pies y la apertura de rodillas
+          siguen un patrón simétrico. Las fuerzas laterales y la aceleración quedan fuera del cálculo.
         </li>
         <li>
           Cadera, rodilla y tobillo se informan <strong>por pierna</strong>. L5/S1 es una sola
@@ -300,33 +282,28 @@ export function ModelNotes() {
         </li>
         <li>
           El <strong>trabajo del levantamiento</strong> es la energía potencial que gana el
-          conjunto cuerpo más barra del fondo al final. Lo manda la carga, no la técnica: cambiar
-          la coordinación lo mueve un puñado de joules, porque llevás tu propio cuerpo un poco más
-          arriba o más abajo. Lo que la técnica sí cambia es <em>dónde</em> cae ese costo, y eso es
-          lo que muestran los colores del esqueleto.
+          conjunto cuerpo más barra del fondo al final. Depende del peso y de la altura que gana
+          cada masa. Podés comparar por separado cómo cambia el momento de cadera, rodilla y
+          tobillo a medida que la barra se aleja o se acerca a cada articulación.
         </li>
         <li>
           Masas y centros de masa vienen de la tabla 4.1 de Winter (Dempster); las longitudes, de
           Drillis y Contini. Las ocho masas segmentarias suman exactamente el peso corporal.
         </li>
         <li>
-          La columna son tres eslabones articulados y en reposo ya vienen curvados: lordosis lumbar
-          con su vértice en L3 y cifosis desde T12/L1. Por eso, cuando la flexionás, el torso se
-          acorta solo y el brazo de palanca de cadera baja: no hay ningún factor de corrección
-          inventado.
+          El modelo representa la columna con una curva de longitud fija. Al aumentar la
+          flexión, cambia la curvatura lumbar y torácica y se acorta la distancia recta
+          entre la cadera y el hombro.
         </li>
         {state.exercise === 'deadlift' && (
           <li>
-            El brazo <strong>arranca vertical</strong>, que es lo que hace una carga alta: el brazo
-            trabaja como tensor y el hombro queda sobre la barra. Con cargas livianas el hombro se
-            adelanta, y eso ahora lo movés vos con el control de brazo. No sale gratis: la barra
-            colgando sólo puede empujar la mano hacia arriba, así que cada centímetro de desfase se
-            lo come el hombro, y ese momento se informa aparte.
+            En el <strong>peso muerto</strong>, la barra ejerce una fuerza hacia abajo sobre
+            las manos. Si adelantás el hombro respecto de la barra, aumenta la distancia
+            horizontal a esa fuerza y crece el momento que debe sostener el hombro.
           </li>
         )}
         <li>
-          La coordinación es una <strong>hipótesis que elegís vos</strong>, no una predicción. El
-          modelo te dice qué cuesta cada patrón, no cuál deberías usar.
+          La coordinación es una <strong>hipótesis que elegís vos</strong>, no una predicción. Los momentos muestran cómo cambia la demanda articular entre patrones.
         </li>
         <li>
           La compresión lumbar es una estimación con un músculo equivalente de 6 cm de brazo a 10°,

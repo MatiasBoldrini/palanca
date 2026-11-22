@@ -17,6 +17,9 @@ const fromMidfoot = (v: number) =>
   v === 0 ? 'mediopié' : `${v > 0 ? '+' : '−'}${Math.abs(v)} cm`
 
 export const PARAM_UI: Record<ParamId, ParamUi> = {
+  toeOutDeg: { label: 'Giro de los pies', scale: 1, step: 1, format: (v) => `${v}°` },
+  squatElbowAngle: { label: 'Giro de los codos', scale: 1, step: 1, format: (v) => `${v}°` },
+  stanceWidth: { label: 'Separación entre los pies', scale: 100, step: 1, format: cm },
   progress: { label: 'Altura en el recorrido', scale: 100, step: 1, format: (v) => `${v}%` },
   load: { label: 'Carga', scale: 1, step: 2.5, format: (v) => `${v} kg` },
   barPosition: { label: 'Respecto al mediopié', scale: 100, step: 0.5, format: fromMidfoot },
@@ -42,10 +45,4 @@ export const PARAM_UI: Record<ParamId, ParamUi> = {
   torso: { label: 'Largo del torso', scale: 100, step: 0.5, format: cm },
   arm: { label: 'Largo del brazo', scale: 100, step: 0.5, format: cm },
   dorsiflexion: { label: 'Dorsiflexión disponible', scale: 1, step: 1, format: (v) => `${v}°` },
-}
-
-/** A model value written the way the controls write it. */
-export function formatParam(id: ParamId, value: number): string {
-  const ui = PARAM_UI[id]
-  return ui.format(Number((value * ui.scale).toFixed(1)))
 }

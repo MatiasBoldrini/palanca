@@ -1,0 +1,159 @@
+.mechanics-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: inherit;
+  user-select: none;
+}
+.mechanics-overlay .mechanics-halo,
+.mechanics-overlay .mechanics-shaft,
+.mechanics-overlay .mechanics-leader,
+.mechanics-overlay .mechanics-lever path,
+.mechanics-overlay .mechanics-offset {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mechanics-overlay .mechanics-halo {
+  stroke: #fcfaf4;
+  stroke-width: 6.2;
+}
+.mechanics-overlay .mechanics-shaft {
+  stroke: currentColor;
+  stroke-width: 2.6;
+}
+.mechanics-overlay .mechanics-vector:not(.force-glyph-body) {
+  stroke-width: 4;
+}
+.mechanics-overlay .mechanics-head {
+  fill: currentColor;
+  stroke: #fcfaf4;
+  stroke-width: 1.6;
+  paint-order: stroke;
+}
+.mechanics-overlay .mechanics-offset {
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.mechanics-overlay .mechanics-force-origin {
+  fill: #fcfaf4;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.mechanics-overlay .mechanics-pivot {
+  fill: currentColor;
+  stroke: #fffdf8;
+  stroke-width: 1.4;
+}
+.mechanics-overlay .mechanics-leader {
+  stroke-width: 1.1;
+  opacity: 0.7;
+  stroke-dasharray: 2 2.8;
+}
+.mechanics-overlay .mechanics-lever path {
+  stroke: #635877;
+  stroke-width: 1.8;
+}
+.mechanics-overlay .mechanics-lever .mechanics-gravity-line {
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+.mechanics-overlay .mechanics-card {
+  fill: #fffdf7;
+  stroke: #d7d2c6;
+  stroke-width: 0.85;
+}
+.mechanics-overlay .mechanics-card-stripe {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+}
+.mechanics-overlay .mechanics-label-name {
+  fill: #403d36;
+  font-size: 10.5px;
+  font-weight: 550;
+}
+.mechanics-overlay .mechanics-label-value {
+  fill: currentColor;
+  font-size: 14px;
+  font-weight: 690;
+  font-variant-numeric: tabular-nums;
+}
+.mechanics-overlay .mechanics-label-extra {
+  fill: #60566e;
+  font-size: 10px;
+}
+.mechanics-overlay .mechanics-profile text {
+  fill: #60566e;
+  font-size: 7.5px;
+}
+.mechanics-overlay .mechanics-profile .mechanics-halo {
+  stroke-width: 3.5;
+}
+.mechanics-overlay .mechanics-profile .mechanics-shaft {
+  stroke-width: 1.5;
+}
+.mechanics-overlay .mechanics-hit {
+  fill: transparent;
+  cursor: pointer;
+  pointer-events: all;
+}
+.mechanics-overlay .mechanics-joint-label {
+  cursor: pointer;
+  pointer-events: all;
+}
+.mechanics-overlay .mechanics-joint-label:is(:hover, :focus-visible) .mechanics-card {
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.mechanics-overlay .mechanics-profile-guide {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.65;
+  opacity: 0.35;
+}
+
+/* Weight, support and contact vectors share a high-contrast outline across the
+   two viewers. Their widths are screen units; their lengths come from the model. */
+.force-glyph-body {
+  fill: currentColor;
+  stroke: #fffcf4;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+.force-glyph-origin {
+  fill: #fffdf8;
+  stroke: currentColor;
+  stroke-width: 2.7;
+}
+.force-glyph-chevrons {
+  fill: none;
+  stroke: white;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.force-glyph-witness {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+.mechanics-overlay .force-label-direction {
+  fill: currentColor;
+  font-size: 10px;
+  font-weight: 620;
+}
+.mechanics-overlay .force-label-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
