@@ -38,7 +38,7 @@ export interface BenchEditorProps {
   editPart?: BenchPartId | null
   onEditPart?: (id: BenchPartId) => void
 }
-type Props = BenchMechanicsProps & BenchEditorProps & { layer: AnatomyLayer }
+type Props = BenchMechanicsProps & BenchEditorProps & { layer: AnatomyLayer; analyzing?: boolean }
 type Body = Awaited<ReturnType<typeof createAnatomicalBody>>
 
 function createFurniture() {
@@ -123,7 +123,7 @@ export function createBenchStudio(
   const ray = new Raycaster()
   const editDrawing = createBodyPartDrawing<BenchPartId>(host, (id) => data().onEditPart?.(id))
   function fit() {
-    const frame = data().frame
+    const { frame, analyzing = true, editingBody } = data()
     if (!width || !height) return
     const direction = camera.position.clone().sub(controls.target).normalize()
     const right = worldUp.clone().cross(direction).normalize()
@@ -154,8 +154,8 @@ export function createBenchStudio(
       bottom = Math.min(bottom, y)
       top = Math.max(top, y)
     }
-    const margin = width < 440 ? 7 : 20
-    const usableHeight = Math.max(30, height - 80)
+    const margin = width < 440 ? 14 : 20
+    const usableHeight = Math.max(30, height - (analyzing || editingBody ? 80 : 2 * margin))
     const ppm = Math.min((width - 2 * margin) / (rightEdge - left), usableHeight / (top - bottom))
     const halfHeight = height / (ppm * 2)
     camera.top = halfHeight

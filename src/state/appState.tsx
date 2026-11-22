@@ -27,6 +27,7 @@ interface BenchSettings {
 }
 
 export interface AppState {
+  analyzing: boolean
   benchActive: boolean
   bench: BenchSettings
   mechanics: MechanicsView
@@ -42,6 +43,7 @@ export interface AppState {
 }
 
 const initialState: AppState = {
+  analyzing: false,
   benchActive: false,
   bench: { progress: 1, gripRatio: 1.5, joint: 'shoulder' },
   mechanics: {
@@ -69,6 +71,7 @@ const initialState: AppState = {
 export type ViewFlag = 'showComGuides' | 'showMomentArms' | 'showLoadMap' | 'showCurves'
 
 export type Action =
+  | { type: 'setAnalyzing'; value: boolean }
   | { type: 'setExercise'; exercise: LiftId }
   | { type: 'setTask'; patch: Partial<Task> }
   | { type: 'setAnthro'; patch: Partial<Anthropometry> }
@@ -112,6 +115,8 @@ function alignProgress(state: AppState): AppState {
 
 function reduceState(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'setAnalyzing':
+      return { ...state, analyzing: action.value }
     case 'setExercise':
       if (action.exercise === 'bench') return { ...state, benchActive: true, playing: false }
       if (!state.benchActive && state.exercise === action.exercise) return state
@@ -184,6 +189,7 @@ function reducer(state: AppState, action: Action): AppState {
   if (
     state === next ||
     action.type === 'setPlaying' ||
+    action.type === 'setAnalyzing' ||
     action.type === 'toggle' ||
     action.type === 'setMechanics' ||
     action.type === 'setBench'
@@ -218,6 +224,7 @@ function encode(state: AppState): string {
     },
     b: [round(state.bench.progress), round(state.bench.gripRatio), state.bench.joint],
     m: state.mechanics,
+    analysis: state.analyzing,
     h: round(state.anthro.height),
     w: round(state.anthro.mass, 1),
     sg: round(state.anthro.shank),
@@ -243,7 +250,7 @@ function encode(state: AppState): string {
   return btoa(encodeURIComponent(JSON.stringify(payload)))
 }
 
-function decode(hash: string): Partial<AppState> | null {
+function decode(hash: string, legacySharedView = false): Partial<AppState> | null {
   try {
     const p = JSON.parse(decodeURIComponent(atob(hash)))
     const exercise: ExerciseId =
@@ -271,6 +278,7 @@ function decode(hash: string): Partial<AppState> | null {
     const mechanics = p.m ?? {}
     const bench = Array.isArray(p.b) ? p.b : []
     return {
+      analyzing: typeof p.analysis === 'boolean' ? p.analysis : legacySharedView,
       benchActive: p.e === 2,
       bench: {
         progress: Number.isFinite(bench[0])
@@ -330,18 +338,19 @@ const STORAGE_KEY = 'palanca.state.v2'
 function loadInitial(): AppState {
   if (typeof window === 'undefined') return initialState
   const hash = window.location.hash.replace(/^#s=/, '')
-  if (hash) {
-    const fromUrl = decode(hash)
-    if (fromUrl) return alignProgress({ ...initialState, ...fromUrl })
-  }
+  let stored: string | null = null
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = decode(stored)
-      if (parsed) return alignProgress({ ...initialState, ...parsed })
-    }
+    stored = window.localStorage.getItem(STORAGE_KEY)
   } catch {
     /* storage unavailable */
+  }
+  if (hash) {
+    const shared = decode(hash, hash !== stored)
+    if (shared) return alignProgress({ ...initialState, ...shared })
+  }
+  if (stored) {
+    const saved = decode(stored)
+    if (saved) return alignProgress({ ...initialState, ...saved, analyzing: false })
   }
   return initialState
 }

@@ -1,5 +1,5 @@
 .anatomy-viewer {
-  --camera-rail-height: 58px;
+  --camera-rail-height: 44px;
   position: relative;
   width: 100%;
   height: 100%;
@@ -10,8 +10,13 @@
   color-scheme: light;
 }
 
-/* Leave a small camera rail below the study. In portrait it also keeps the
-   controls away from the feet at full extension. */
+/* Study labels and editing handles keep the lower corner clear for the camera. */
+.anatomy-viewer.movement-view:not(.editing-body) {
+  --camera-rail-height: 0px;
+}
+.anatomy-viewer.movement-view:not(.edit-forces) :is(.load-path-drawing, .mechanics-overlay) {
+  display: none;
+}
 .anatomy-surface {
   position: absolute;
   inset: 0 0 var(--camera-rail-height);
@@ -40,18 +45,36 @@
   font-size: 13px;
 }
 
-.anatomy-camera {
+.control-disclosure.camera-menu {
   position: absolute;
-  right: 12px;
-  bottom: 4px;
-  display: inline-flex;
+  z-index: 3;
+  right: 8px;
+  bottom: 0;
+  color: #524d42;
+}
+.camera-menu.control-disclosure > summary {
+  padding-inline: 8px;
+  color: #524d42;
+  font-size: 12px;
+  font-weight: 550;
+}
+.camera-menu.control-disclosure summary:hover,
+.camera-menu.control-disclosure[open] summary {
+  color: #282a25;
+}
+.camera-menu > .control-menu {
+  top: auto;
+  bottom: 100%;
+  width: max-content;
+  padding: 2px 4px;
+  border-color: #d6d1c5;
+  background: #fbfaf6;
+  color: #524d42;
+}
+.anatomy-camera {
+  display: flex;
   align-items: center;
   gap: 1px;
-  padding: 2px 4px;
-  color: #524d42;
-  border: 1px solid #d6d1c5;
-  border-radius: 7px;
-  background: #fbfaf6;
 }
 
 .anatomy-camera-view {
@@ -120,10 +143,4 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-@media (pointer: coarse) {
-  .anatomy-camera {
-    right: 8px;
-  }
 }

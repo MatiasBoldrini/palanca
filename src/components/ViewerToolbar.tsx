@@ -1,5 +1,7 @@
-import { Check, ChevronDown, Layers2, ScanLine } from 'lucide-react'
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { Check, ChevronDown, ScanLine, SlidersHorizontal } from 'lucide-react'
+import { useRef, type ReactNode } from 'react'
+import { ControlDisclosure } from './ControlDisclosure'
+import './minimalControls.css'
 
 type Mode = 'anatomy' | 'diagram'
 type Layer = 'muscles' | 'skeleton'
@@ -10,6 +12,7 @@ interface Props {
   layer: Layer
   onLayer: (layer: Layer) => void
   editingBody: boolean
+  onSettings: () => void
   onEdit: () => void
   canEdit: boolean
   children?: ReactNode
@@ -22,91 +25,101 @@ export function ViewerToolbar({
   onLayer,
   editingBody,
   onEdit,
+  onSettings,
   canEdit,
   children,
 }: Props) {
-  const [expanded, setExpanded] = useState(false)
-  const layersButton = useRef<HTMLButtonElement>(null)
-  const panel = useId()
-  const canShowLayers = mode === 'anatomy' || !!children
+  const action = useRef<HTMLDivElement>(null)
+  function toggleEditor() {
+    onEdit()
+    requestAnimationFrame(() =>
+      action.current
+        ?.querySelector<HTMLElement>('summary, .body-edit-done')
+        ?.focus({ preventScroll: true }),
+    )
+  }
+
   return (
-    <div
-      className="viewer-tools"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && expanded) {
-          setExpanded(false)
-          layersButton.current?.focus()
-        }
-      }}
-    >
-      <div className="viewer-tool-row">
-        <div className="render-mode" role="group" aria-label="Representación">
-          {(['anatomy', 'diagram'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-label={value === 'anatomy' ? 'Anatomía 3D' : 'Diagrama 2D'}
-              aria-pressed={mode === value}
-              onClick={() => {
-                if (mode !== value) onMode(value)
-                setExpanded(false)
-              }}
-            >
-              <span className="mode-name">{value === 'anatomy' ? 'Anatomía ' : 'Diagrama '}</span>
-              {value === 'anatomy' ? '3D' : '2D'}
-            </button>
-          ))}
-        </div>
-        <div className="viewer-tool-actions">
-          {canShowLayers && (
-            <button
-              ref={layersButton}
-              type="button"
-              aria-expanded={expanded}
-              aria-controls={panel}
-              onClick={() => setExpanded(!expanded)}
-            >
-              <Layers2 size={16} aria-hidden />
-              Capas
-            </button>
-          )}
-          {canEdit && (
-            <button
-              type="button"
-              className="edit-tool"
-              aria-label="Ajustar cuerpo"
-              aria-pressed={editingBody}
-              onClick={() => {
-                setExpanded(false)
-                onEdit()
-              }}
-            >
-              {editingBody ? <Check size={16} aria-hidden /> : <ScanLine size={16} aria-hidden />}
-              {editingBody ? 'Listo' : 'Ajustar cuerpo'}
-            </button>
-          )}
-        </div>
-      </div>
-      {canShowLayers && (
-        <div className="viewer-layer-panel" id={panel} hidden={!expanded}>
-          {mode === 'anatomy' && (
-            <label className="tissue-picker">
-              Anatomía
-              <span>
-                <select
-                  value={layer}
-                  aria-label="Capa anatómica"
-                  onChange={(event) => onLayer(event.target.value as Layer)}
+    <div ref={action} className="viewer-toolbox">
+      {editingBody ? (
+        <button className="body-edit-done" type="button" onClick={toggleEditor}>
+          <Check size={16} aria-hidden /> Terminar ajuste
+        </button>
+      ) : (
+        <ControlDisclosure
+          className="view-options"
+          label="Herramientas"
+          trigger={
+            <>
+              Herramientas <ChevronDown size={14} aria-hidden />
+            </>
+          }
+        >
+          {(close) => (
+            <>
+              <label className="view-option-row">
+                Vista
+                <span className="view-select">
+                  <select
+                    value={mode}
+                    aria-label="Representación"
+                    onChange={(e) => {
+                      onMode(e.target.value as Mode)
+                      close()
+                    }}
+                  >
+                    <option value="anatomy">Anatomía 3D</option>
+                    <option value="diagram">Diagrama 2D</option>
+                  </select>
+                  <ChevronDown size={14} aria-hidden />
+                </span>
+              </label>
+              {mode === 'anatomy' && (
+                <label className="view-option-row">
+                  Anatomía
+                  <span className="view-select">
+                    <select
+                      value={layer}
+                      aria-label="Capa anatómica"
+                      onChange={(e) => {
+                        onLayer(e.target.value as Layer)
+                        close()
+                      }}
+                    >
+                      <option value="muscles">Músculos</option>
+                      <option value="skeleton">Esqueleto</option>
+                    </select>
+                    <ChevronDown size={14} aria-hidden />
+                  </span>
+                </label>
+              )}
+              {canEdit && (
+                <button
+                  className="edit-body-action"
+                  type="button"
+                  onClick={() => {
+                    close()
+                    toggleEditor()
+                  }}
                 >
-                  <option value="muscles">Músculos</option>
-                  <option value="skeleton">Esqueleto</option>
-                </select>
-                <ChevronDown size={14} aria-hidden />
-              </span>
-            </label>
+                  <ScanLine size={16} aria-hidden /> Ajustar cuerpo
+                </button>
+              )}
+              <button
+                className="edit-body-action"
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  close()
+                  onSettings()
+                }}
+              >
+                <SlidersHorizontal size={16} aria-hidden /> Ajustes
+              </button>
+              {children}
+            </>
           )}
-          {children}
-        </div>
+        </ControlDisclosure>
       )}
     </div>
   )

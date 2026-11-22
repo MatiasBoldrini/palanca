@@ -1,5 +1,5 @@
-import { ChevronDown, Footprints, GitCompareArrows } from 'lucide-react'
-import { useId, useMemo, useState } from 'react'
+import { ChevronDown, GitCompareArrows } from 'lucide-react'
+import { useMemo } from 'react'
 import type { Anthropometry } from '../model/anthropometry'
 import { clamp, lerp } from '../model/geometry'
 import { feasibleRange, type Range } from '../model/interact'
@@ -13,6 +13,7 @@ import {
 } from '../model/lift'
 import { defaultStanceWidth, getStance, stanceWidthRange } from '../model/stance'
 import { Slider } from './ui'
+import { ControlDisclosure } from './ControlDisclosure'
 import { StanceProfiles } from './StanceProfiles'
 import './StanceStudy.css'
 
@@ -76,70 +77,67 @@ export function StanceControls({
   const range = stanceWidthRange(exercise, anthro, style)
   const normal = defaultStanceWidth(exercise, anthro.height)
   const wide = wideSquat(anthro)
-  const [widthOpen, setWidthOpen] = useState(false)
-  const widthPanelId = useId()
   const centimetres = Math.round(stance.width * 100)
+  const preset = deadlift
+    ? style === 'sumo'
+      ? 1
+      : 0
+    : [normal, wide].findIndex((width) => Math.abs(stance.width - width) < 0.005)
+  const names = deadlift ? ['Convencional', 'Sumo'] : ['Base media', 'Base amplia']
+  const name = names[preset] ?? `Base de ${centimetres} cm`
+
   return (
-    <section className="atlas-card stance-tools stance-bar" aria-label="Base de apoyo">
-      <div className="stance-bar-row">
-        <h2 className="stance-bar-title" aria-label="Base de apoyo">
-          <Footprints size={16} aria-hidden />
-          <span>Base de apoyo</span>
-        </h2>
-        <div className="stance-choices" role="group" aria-label="Variante de la base">
-          <button
-            type="button"
-            aria-pressed={
-              deadlift ? style === 'conventional' : Math.abs(stance.width - normal) < 0.005
-            }
-            onClick={() =>
-              onChange(deadlift
-                ? { deadliftStyle: 'conventional', stanceWidth: undefined }
-                : { stanceWidth: undefined })
-            }
-          >
-            {deadlift ? 'Convencional' : 'Media'}
-          </button>
-          <button
-            type="button"
-            aria-pressed={deadlift ? style === 'sumo' : Math.abs(stance.width - wide) < 0.005}
-            onClick={() =>
-              onChange(deadlift
-                ? { deadliftStyle: 'sumo', stanceWidth: undefined }
-                : { stanceWidth: wide })
-            }
-          >
-            {deadlift ? 'Sumo' : 'Amplia'}
-          </button>
-        </div>
-        <button
-          type="button"
-          className="stance-width-toggle"
-          aria-controls={widthPanelId}
-          aria-expanded={widthOpen}
-          onClick={() => setWidthOpen(!widthOpen)}
-        >
-          Ancho <b>{centimetres} cm</b> <ChevronDown size={14} aria-hidden />
-        </button>
-      </div>
-      <div id={widthPanelId} className="stance-width-panel" hidden={!widthOpen}>
-        <StanceFootprint width={stance.width} turnout={stance.toeOut} height={anthro.height} />
-        <div className="stance-width-input">
-          <Slider
-            label="Separación entre los pies"
-            min={Math.ceil(range.min * 100)}
-            max={Math.floor(range.max * 100)}
-            value={centimetres}
-            step={1}
-            format={(v) => v + ' cm'}
-            onChange={(v) => onChange({ stanceWidth: v / 100 })}
-          />
-          <p className="stance-toeout">
-            De centro a centro · puntas {Math.round(stance.toeOut)}° hacia afuera
-          </p>
-        </div>
-      </div>
-    </section>
+    <ControlDisclosure
+      className="setup-menu"
+      label={`Cambiar postura, ${name}, ${centimetres} cm entre pies`}
+      trigger={
+        <>
+          {name} <ChevronDown size={14} aria-hidden />
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <div className="stance-presets" role="group" aria-label="Variante de la base">
+            {names.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={index === preset}
+                onClick={() => {
+                  onChange(
+                    deadlift
+                      ? {
+                          deadliftStyle: index === 0 ? 'conventional' : 'sumo',
+                          stanceWidth: undefined,
+                        }
+                      : { stanceWidth: index === 0 ? undefined : wide },
+                  )
+                  close()
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="stance-width-panel">
+            <StanceFootprint width={stance.width} turnout={stance.toeOut} height={anthro.height} />
+            <div className="stance-width-input">
+              <Slider
+                label="Separación entre los pies"
+                min={Math.ceil(range.min * 100)}
+                max={Math.floor(range.max * 100)}
+                value={centimetres}
+                step={1}
+                format={(v) => v + ' cm'}
+                onChange={(v) => onChange({ stanceWidth: v / 100 })}
+              />
+              <p className="stance-toeout">Puntas a {Math.round(stance.toeOut)}°</p>
+            </div>
+          </div>
+        </>
+      )}
+    </ControlDisclosure>
   )
 }
 
@@ -244,8 +242,9 @@ export function StanceComparison({
             referenceLabel={alternative.name}
           />
           <p className="stance-explanation">
-            El tramo violeta va de la <strong>cadera a la vertical de la barra</strong>. A igual carga,
-            cuanto más largo es ese brazo de palanca, mayor es el momento que la barra ejerce sobre la cadera.
+            El tramo violeta va de la <strong>cadera a la vertical de la barra</strong>. A igual
+            carga, cuanto más largo es ese brazo de palanca, mayor es el momento que la barra ejerce
+            sobre la cadera.
           </p>
         </>
       ) : (

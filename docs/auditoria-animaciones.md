@@ -47,8 +47,8 @@ En banca, cada mano recibe la mitad del peso de la barra. El contacto del cuerpo
 
 ## Pantalla de estudio en el celular
 
-En Chrome con emulación táctil a 390 × 844 px, el lienzo de peso muerto pasaba por el borde inferior de la pantalla y el botón de reproducción empezaba a 1137 px del inicio. En la nueva disposición, el lienzo entero y los tres cortes del recorrido entran en la primera pantalla. El botón empieza a 689 px en peso muerto y sentadilla, y a 678 px en banca.
+En Chrome con emulación táctil a 390 × 844 px, el lienzo inicial de peso muerto pasó de empezar a 319 px de la parte superior a empezar a 108 px. Su altura pasó de 299 a 598 px. En 320 × 667 px, el lienzo inicial mide 421 px de alto. En ambos tamaños entran el movimiento, la reproducción y el interruptor **Fuerzas y momentos** en la primera pantalla de los tres ejercicios.
 
-El ancho de pies, el agarre, las capas y la tabla de medidas se despliegan desde su control. El modelo conserva los colores de fuerza y momento. La revisión siguió el procedimiento de [Unslop, de Damir Sokolovsky](https://github.com/heydamir/unslop).
+El interruptor muestra las fuerzas, los momentos y la guía conservando la posición del recorrido y la cámara. La variante o el agarre se ajustan al lado de la carga. Desde **Herramientas** se accede al editor del cuerpo, la anatomía y el diagrama 2D. La revisión visual siguió el procedimiento de [Unslop, de Damir Sokolovsky](https://github.com/heydamir/unslop).
 
-Se probaron la selección por toque, el arrastre horizontal para girar, el desplazamiento vertical de la página y la pinza para acercar en los tres ejercicios. Las pruebas en escritorio incluyeron ratón, zoom y navegación por teclado.
+La verificación en Chrome incluyó los anchos de 320, 390 y 1024 px, los tres ejercicios, el foco de teclado al cerrar menús, los cambios de postura y de fase, la restauración de enlaces y la edición de segmentos. En el banco se comprobó el reparto al cambiar el agarre. En los tres ejercicios se probaron el giro del modelo y el zoom desde el control de cámara.

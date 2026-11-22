@@ -1,4 +1,4 @@
-import { ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
+import { CameraMenu } from './CameraMenu'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ACESFilmicToneMapping, SRGBColorSpace, WebGLRenderer } from 'three'
 import { createAnatomicalBody, type AnatomyLayer } from '../anatomy/body'
@@ -8,12 +8,17 @@ import {
   type BenchView,
   type BenchEditorProps,
 } from '../anatomy/benchStudio'
-import { BenchAnnotations, type BenchMechanicsProps, type BenchProjection } from './BenchAnnotations'
+import {
+  BenchAnnotations,
+  type BenchMechanicsProps,
+  type BenchProjection,
+} from './BenchAnnotations'
 import './anatomyViewer.css'
 import '../anatomy/mechanicsDrawing.css'
 import './benchViewer.css'
 
 interface Props extends BenchMechanicsProps, BenchEditorProps {
+  analyzing?: boolean
   editForces?: boolean
   layer: AnatomyLayer
   onUnavailable: () => void
@@ -35,7 +40,12 @@ export function BenchViewer(props: Props) {
     const resized = (Object.keys(after) as (keyof typeof after)[]).some(
       (key) => before[key] !== after[key],
     )
-    if (resized) studio.current?.refit()
+    if (
+      resized ||
+      previous.analyzing !== props.analyzing ||
+      previous.editingBody !== props.editingBody
+    )
+      studio.current?.refit()
     else studio.current?.draw()
   }, [props])
   useEffect(() => {
@@ -101,17 +111,26 @@ export function BenchViewer(props: Props) {
     }
   }, [])
   return (
-    <div className="anatomy-viewer bench-viewer">
+    <div
+      className={
+        'anatomy-viewer bench-viewer' +
+        (props.analyzing === false ? ' movement-view' : '') +
+        (props.editingBody ? ' editing-body' : '') +
+        (props.editForces && props.editingBody ? ' edit-forces' : '')
+      }
+    >
       <div className="anatomy-surface" ref={host} />
       <div className="bench-label-surface">
-        {ready && projection && (!props.editingBody || props.editForces) && (
-          <BenchAnnotations
-            {...props}
-            projection={projection}
-            vectorsOnly={props.editingBody}
-            showForces={props.editingBody ? true : props.showForces}
-          />
-        )}
+        {ready &&
+          projection &&
+          (props.editingBody ? props.editForces : props.analyzing !== false) && (
+            <BenchAnnotations
+              {...props}
+              projection={projection}
+              vectorsOnly={props.editingBody}
+              showForces={props.editingBody ? true : props.showForces}
+            />
+          )}
       </div>
       {!ready && (
         <p className="anatomy-loading" role="status">
@@ -119,43 +138,14 @@ export function BenchViewer(props: Props) {
         </p>
       )}
       {ready && (
-        <div className="anatomy-camera" role="group" aria-label="Controles de cámara">
-          <label className="anatomy-camera-view">
-            <Orbit size={15} aria-hidden />
-            <select
-              aria-label="Vista de cámara"
-              value={view}
-              onChange={(event) => studio.current?.setView(event.target.value as BenchView)}
-            >
-              {Object.entries(BENCH_CAMERAS).map(([key, camera]) => (
-                <option key={key} value={key}>
-                  {camera.label}
-                </option>
-              ))}
-              {view === 'free' && (
-                <option value="free" disabled>
-                  Libre
-                </option>
-              )}
-            </select>
-            <ChevronDown size={12} aria-hidden />
-          </label>
-          <span className="anatomy-camera-rule" />
-          <button
-            aria-label="Alejar modelo"
-            disabled={zoom <= 0.801}
-            onClick={() => studio.current?.zoom(1 / 1.22)}
-          >
-            <Minus size={15} aria-hidden />
-          </button>
-          <button
-            aria-label="Acercar modelo"
-            disabled={zoom >= 2.439}
-            onClick={() => studio.current?.zoom(1.22)}
-          >
-            <Plus size={15} aria-hidden />
-          </button>
-        </div>
+        <CameraMenu<BenchView>
+          views={BENCH_CAMERAS}
+          view={view}
+          zoom={zoom}
+          maxZoom={2.44}
+          onView={(key) => studio.current?.setView(key)}
+          onZoom={(factor) => studio.current?.zoom(factor)}
+        />
       )}
     </div>
   )

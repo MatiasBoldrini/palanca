@@ -1,6 +1,6 @@
-import { Activity, SlidersHorizontal, Weight } from 'lucide-react'
+import { Activity, ChevronDown } from 'lucide-react'
 import { useApp, type LiftId } from '../state/appState'
-import { Segmented } from './ui'
+import './minimalControls.css'
 
 const LIFTS: { value: LiftId; label: string }[] = [
   { value: 'deadlift', label: 'Peso muerto' },
@@ -8,75 +8,42 @@ const LIFTS: { value: LiftId; label: string }[] = [
   { value: 'squat', label: 'Sentadilla' },
 ]
 
-export function LabHeader({
-  onSettings,
-  onSwitch,
-}: {
-  onSettings: () => void
-  onSwitch?: () => void
-}) {
+export function LabHeader({ onSwitch }: { onSwitch?: () => void }) {
   const { state, dispatch } = useApp()
   const active = state.benchActive ? 'bench' : state.exercise
+  const name = LIFTS.find((lift) => lift.value === active)?.label
   return (
-    <header className="atlas-header">
-      <div className="atlas-header-inner">
-        <div className="atlas-brand">
-          <img src={import.meta.env.BASE_URL + 'icon.svg'} alt="" width="32" height="32" />
-          <strong>Palanca</strong>
-          <span>Laboratorio de biomecánica</span>
-        </div>
-        <nav aria-label="Ejercicio">
-          <Segmented
+    <header className="lift-header">
+      <div className="lift-header-inner">
+        <span className="lift-wordmark">
+          <img src={import.meta.env.BASE_URL + 'icon.svg'} alt="" width="22" height="22" />
+          Palanca
+        </span>
+        <div className="lift-selector">
+          <h1 id="exercise-title">{name}</h1>
+          <ChevronDown size={16} aria-hidden />
+          <select
+            id="lift-select"
+            aria-label="Ejercicio"
             value={active}
-            groupId="exercise"
-            panelId="exercise-panel"
-            options={LIFTS}
-            onChange={(exercise) => {
+            onChange={(event) => {
+              const exercise = event.target.value as LiftId
               if (exercise === active) return
               onSwitch?.()
               dispatch({ type: 'setExercise', exercise })
               requestAnimationFrame(() =>
-                document.getElementById('exercise-' + exercise)?.focus({ preventScroll: true }),
+                document.getElementById('lift-select')?.focus({ preventScroll: true }),
               )
             }}
-          />
-        </nav>
-        <button className="settings-open" onClick={onSettings} aria-haspopup="dialog">
-          <SlidersHorizontal size={16} aria-hidden /> Ajustes
-        </button>
+          >
+            {LIFTS.map((lift) => (
+              <option key={lift.value} value={lift.value}>
+                {lift.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-    </header>
-  )
-}
-
-export function ExerciseHeading({
-  name,
-  load,
-  onLoadClick,
-}: {
-  name: string
-  load: number
-  onLoadClick: () => void
-}) {
-  return (
-    <header className="exercise-head">
-      <h1>{name}</h1>
-      <button
-        type="button"
-        className="load-control"
-        onClick={() => {
-          onLoadClick()
-          requestAnimationFrame(() => document.getElementById('settings-load')?.focus())
-        }}
-        aria-haspopup="dialog"
-        aria-label={`Ajustar carga de la barra, ${load} kg`}
-      >
-        <Weight size={16} aria-hidden />
-        <span>
-          <small>Carga en barra</small>
-          <strong>{load.toLocaleString('es-AR')} kg</strong>
-        </span>
-      </button>
     </header>
   )
 }

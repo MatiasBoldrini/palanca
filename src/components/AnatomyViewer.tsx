@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { touchCameraHint, ViewerCameraControls } from '../anatomy/viewerCameraControls'
@@ -15,9 +15,11 @@ import { GRAVITY, type Anthropometry } from '../model/anthropometry'
 import type { Vec2 } from '../model/geometry'
 import type { Bounds, ExerciseId, Frame, Task } from '../model/lift'
 import type { Posture } from '../model/posture'
+import { CameraMenu } from './CameraMenu'
 import './anatomyViewer.css'
 
 interface Props {
+  analyzing?: boolean
   frame: Frame
   editingBody?: boolean
   editForces?: boolean
@@ -39,10 +41,10 @@ interface Props {
 }
 
 const VIEWS = {
-  oblique: { name: 'Tres cuartos', yaw: 38, elevation: 11 },
-  front: { name: 'Anterior', yaw: 90, elevation: 6 },
-  rear: { name: 'Posterior', yaw: -90, elevation: 6 },
-  side: { name: 'Perfil', yaw: 0, elevation: 3 },
+  oblique: { label: 'Tres cuartos', yaw: 38, elevation: 11 },
+  front: { label: 'Anterior', yaw: 90, elevation: 6 },
+  rear: { label: 'Posterior', yaw: -90, elevation: 6 },
+  side: { label: 'Perfil', yaw: 0, elevation: 3 },
 } as const
 type View = keyof typeof VIEWS
 type Body = Awaited<ReturnType<typeof createAnatomicalBody>>
@@ -237,7 +239,17 @@ function createStudio(
   } | null = null
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-  function fit({ frame, anthro, task, bounds, postures, mechanics, editingBody, editForces }: Props) {
+  function fit({
+    frame,
+    anthro,
+    task,
+    bounds,
+    postures,
+    mechanics,
+    editingBody,
+    editForces,
+    analyzing = true,
+  }: Props) {
     direction.subVectors(camera.position, controls.target).normalize()
     right.crossVectors(camera.up, direction).normalize()
     up.crossVectors(direction, right).normalize()
@@ -259,7 +271,7 @@ function createStudio(
     }
     const h = anthro.height
     const { stance } = frame
-    const showForces = editingBody ? editForces : mechanics.forces
+    const showForces = editingBody ? editForces : analyzing && mechanics.forces
     const forceRatio = showForces ? task.load / (task.load + anthro.mass) : 0
     function includePose(p: Posture) {
       include(p.headTop, h * 0.055, 0.025)
@@ -426,6 +438,7 @@ function createStudio(
       return
     }
     bodyParts.hide()
+    if (next.analyzing === false) return
     const contacts = loadPath.draw(next, camera, width, height)
     drawing.draw(next, camera, width, height, contacts)
   }
@@ -751,12 +764,17 @@ export function AnatomyViewer(props: Props) {
     }
   }, [hint])
 
-  const showContacts = !props.editingBody && props.mechanics.forces && props.mechanics.loadPath
+  const showContacts =
+    props.analyzing !== false &&
+    !props.editingBody &&
+    props.mechanics.forces &&
+    props.mechanics.loadPath
   const deadlift = props.exercise === 'deadlift'
   return (
     <div
       className={
         'anatomy-viewer' +
+        (props.analyzing === false ? ' movement-view' : '') +
         (showContacts ? ' with-load-path' : '') +
         (props.editingBody ? ' editing-body' : '') +
         (props.editingBody && props.editForces ? ' edit-forces' : '')
@@ -806,47 +824,14 @@ export function AnatomyViewer(props: Props) {
         </p>
       )}
       {ready && (
-        <div className="anatomy-camera" role="group" aria-label="Controles de cámara">
-          <label className="anatomy-camera-view">
-            <Orbit size={15} aria-hidden />
-            <select
-              aria-label="Vista de cámara"
-              value={view}
-              onChange={(event) => runtime.current?.setView(event.target.value as View)}
-            >
-              {Object.entries(VIEWS).map(([key, item]) => (
-                <option key={key} value={key}>
-                  {item.name}
-                </option>
-              ))}
-              {view === 'free' && (
-                <option value="free" disabled>
-                  Libre
-                </option>
-              )}
-            </select>
-            <ChevronDown size={12} aria-hidden />
-          </label>
-          <span className="anatomy-camera-rule" />
-          <button
-            type="button"
-            disabled={zoom <= 0.801}
-            aria-label="Alejar modelo"
-            title="Alejar modelo"
-            onClick={() => runtime.current?.setZoom(1 / 1.22)}
-          >
-            <Minus aria-hidden size={15} />
-          </button>
-          <button
-            type="button"
-            disabled={zoom >= 2.449}
-            aria-label="Acercar modelo"
-            title="Acercar modelo"
-            onClick={() => runtime.current?.setZoom(1.22)}
-          >
-            <Plus aria-hidden size={15} />
-          </button>
-        </div>
+        <CameraMenu<View>
+          views={VIEWS}
+          view={view}
+          zoom={zoom}
+          maxZoom={2.45}
+          onView={(key) => runtime.current?.setView(key)}
+          onZoom={(factor) => runtime.current?.setZoom(factor)}
+        />
       )}
     </div>
   )

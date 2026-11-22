@@ -1,5 +1,5 @@
 import { MotionConfig } from 'motion/react'
-import { ArrowDown, ArrowLeftRight, ChartSpline } from 'lucide-react'
+import { ChartSpline } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import type { MuscleId } from './anatomy/body'
 import { LiftTransport } from './components/LiftTransport'
@@ -21,7 +21,7 @@ import { ViewerToolbar } from './components/ViewerToolbar'
 import { BodyEditor } from './components/BodyEditor'
 import { Inspector, ParamSlider } from './components/Inspector'
 import { MetricsTable, buildRows } from './components/Metrics'
-import { LabHeader, ExerciseHeading, LabFooter } from './components/LabHeader'
+import { LabHeader, LabFooter } from './components/LabHeader'
 import { BenchLab } from './components/BenchLab'
 import { SharePosture } from './components/SharePosture'
 import { ForceReadingGuide } from './components/ForceReadingGuide'
@@ -49,7 +49,7 @@ import type { Coordination, Task } from './model/lift'
 import { simulateSeries, solveFrame } from './model/lift'
 import type { Anthropometry } from './model/anthropometry'
 import { AppStateProvider, useApp } from './state/appState'
-import { EXERCISE_META } from './state/presets'
+import { AnalysisToggle, LoadButton } from './components/MovementControls'
 import './styles/base.css'
 import './styles/app.css'
 
@@ -81,7 +81,7 @@ function StandingLab() {
   // place on it. The panel is the long form for when you want it.
   const [panelOpen, setPanelOpen] = useState(false)
 
-  const { anthro, task, exercise } = state
+  const { anthro, task, exercise, analyzing } = state
 
   const springTarget = useMemo(
     () => ({
@@ -220,7 +220,7 @@ function StandingLab() {
   // is and where it stands before you commit to opening anything.
   const hotspots = useMemo(() => {
     if (mode !== 'diagram' || state.playing) return []
-    return hotspotsFor(exercise, frame, state.showComGuides).map((hotspot) => {
+    return hotspotsFor(exercise, frame, analyzing && state.showComGuides).map((hotspot) => {
       const primary = paramsFor(hotspot.id, exercise)[0]
       return {
         ...hotspot,
@@ -229,7 +229,17 @@ function StandingLab() {
           : undefined,
       }
     })
-  }, [mode, state.playing, exercise, frame, state.showComGuides, anthro, task, coordination])
+  }, [
+    mode,
+    state.playing,
+    exercise,
+    frame,
+    analyzing,
+    state.showComGuides,
+    anthro,
+    task,
+    coordination,
+  ])
 
   const setParam = useCallback(
     (id: ParamId, value: number) => {
@@ -331,73 +341,76 @@ function StandingLab() {
   }
 
   return (
-    <div className="atlas-app">
-      <LabHeader onSettings={openSettings} onSwitch={() => setSelected(null)} />
-      <main className="atlas-main">
-        <ExerciseHeading
-          name={EXERCISE_META[exercise].name}
-          load={task.load}
-          onLoadClick={openSettings}
-        />
+    <div className="atlas-app movement-app">
+      <LabHeader onSwitch={() => setSelected(null)} />
+      <main className="atlas-main" aria-labelledby="exercise-title">
         <div
           className="atlas-layout"
           id="exercise-panel"
-          role="tabpanel"
-          aria-labelledby={`exercise-${exercise}`}
+          data-analyzing={analyzing && !editingBody}
         >
           <div className="lift-column">
-            <StanceControls
-              exercise={exercise}
-              anthro={anthro}
-              coordination={coordination}
-              onChange={(patch) => dispatch({ type: 'setCoordination', patch })}
-            />
             <section
               className="atlas-card viewer-card"
               aria-label="Simulador del levantamiento"
-              data-force-focus={mechanics.forces && !editingBody ? mechanics.focus : 'all'}
+              data-force-focus={
+                analyzing && mechanics.forces && !editingBody ? mechanics.focus : 'all'
+              }
             >
-              <ViewerToolbar
-                mode={mode}
-                onMode={chooseView}
-                layer={layer}
-                onLayer={(value) => {
-                  setLayer(value)
-                  if (value === 'skeleton') setMuscle(null)
-                }}
-                canEdit={mode === 'anatomy'}
-                editingBody={editingBody}
-                onEdit={() => {
-                  stopPlayback()
-                  setEditingBody(!editingBody)
-                }}
-              >
-                {mode === 'anatomy' && !editingBody && (
-                  <MechanicsControls<JointKey>
-                    {...mechanics}
-                    options={overlay.moments}
-                    onLoadPath={() =>
-                      dispatch({
-                        type: 'setMechanics',
-                        patch: {
-                          forces: true,
-                          loadPath: !mechanics.forces || !mechanics.loadPath,
-                        },
-                      })
-                    }
-                    onForces={() =>
-                      dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
-                    }
-                    onMoments={() =>
-                      dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
-                    }
-                    onLever={() =>
-                      dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
-                    }
-                    onJoint={selectJoint}
+              <div className="movement-options">
+                <div className="movement-setup">
+                  <StanceControls
+                    key={exercise}
+                    exercise={exercise}
+                    anthro={anthro}
+                    coordination={coordination}
+                    onChange={(patch) => dispatch({ type: 'setCoordination', patch })}
                   />
-                )}
-              </ViewerToolbar>
+                  <LoadButton load={task.load} onClick={openSettings} />
+                </div>
+                <ViewerToolbar
+                  onSettings={openSettings}
+                  mode={mode}
+                  onMode={chooseView}
+                  layer={layer}
+                  onLayer={(value) => {
+                    setLayer(value)
+                    if (value === 'skeleton') setMuscle(null)
+                  }}
+                  canEdit={mode === 'anatomy'}
+                  editingBody={editingBody}
+                  onEdit={() => {
+                    stopPlayback()
+                    setEditingBody(!editingBody)
+                  }}
+                >
+                  {analyzing && mode === 'anatomy' && !editingBody && (
+                    <MechanicsControls<JointKey>
+                      {...mechanics}
+                      options={overlay.moments}
+                      onLoadPath={() =>
+                        dispatch({
+                          type: 'setMechanics',
+                          patch: {
+                            forces: true,
+                            loadPath: !mechanics.forces || !mechanics.loadPath,
+                          },
+                        })
+                      }
+                      onForces={() =>
+                        dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                      }
+                      onMoments={() =>
+                        dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                      }
+                      onLever={() =>
+                        dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                      }
+                      onJoint={selectJoint}
+                    />
+                  )}
+                </ViewerToolbar>
+              </div>
               {mode === 'anatomy' && editingBody && (
                 <BodyEditor
                   editForces={editForces}
@@ -424,9 +437,12 @@ function StandingLab() {
                 </p>
               )}
               <div className={`atlas-viewport ${mode}`} id="lift-viewport" tabIndex={-1}>
-                {mode === 'anatomy' && (
-                  <div className="model-hint">
-                    {!editingBody && muscle && layer === 'muscles' ? (
+                {analyzing &&
+                  !editingBody &&
+                  mode === 'anatomy' &&
+                  muscle &&
+                  layer === 'muscles' && (
+                    <div className="model-hint">
                       <button
                         aria-label={`Ver ficha de ${muscleGuide[muscle].name}`}
                         onClick={() => {
@@ -436,17 +452,10 @@ function StandingLab() {
                           )
                         }}
                       >
-                        <span className="hint-group">{muscleGuide[muscle].name}</span> Ver ficha
+                        {muscleGuide[muscle].name} · Ver ficha
                       </button>
-                    ) : (
-                      <span className="rotate-hint">
-                        <ArrowLeftRight size={14} aria-hidden />
-                        <span>Girá</span>
-                        <span className="hint-long"> el modelo</span>
-                      </span>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
                 {mode === 'anatomy' ? (
                   <ViewerBoundary onUnavailable={useDiagramFallback}>
                     <Suspense
@@ -457,6 +466,7 @@ function StandingLab() {
                       }
                     >
                       <AnatomyViewer
+                        analyzing={analyzing}
                         playing={state.playing}
                         postures={series.postures}
                         bounds={series.bounds}
@@ -475,10 +485,10 @@ function StandingLab() {
                           selectJoint(joint)
                           setGuide('momentos')
                         }}
-                        selectedMuscle={muscle}
+                        selectedMuscle={analyzing ? muscle : null}
                         onSelectMuscle={(group) => {
                           setMuscle(group)
-                          if (group) setGuide('musculos')
+                          if (group && analyzing) setGuide('musculos')
                         }}
                         onUnavailable={useDiagramFallback}
                       />
@@ -490,9 +500,9 @@ function StandingLab() {
                     bounds={series.bounds}
                     exercise={exercise}
                     color={ACCENT}
-                    showComGuides={state.showComGuides}
-                    showMomentArms={state.showMomentArms}
-                    showLoadMap={state.showLoadMap}
+                    showComGuides={analyzing && state.showComGuides}
+                    showMomentArms={analyzing && state.showMomentArms}
+                    showLoadMap={analyzing && state.showLoadMap}
                     plateRadius={task.plateRadius}
                     peakMoment={peakMoment}
                     hotspots={state.playing ? [] : hotspots}
@@ -534,29 +544,30 @@ function StandingLab() {
                   setProgress(value)
                 }}
               />
-              <button
-                type="button"
-                className="guide-jump"
-                onClick={() => {
-                  setGuide('posturas')
-                  requestAnimationFrame(() => document.getElementById('stance-comparison')?.focus())
+              <AnalysisToggle
+                active={analyzing}
+                onChange={(value) => {
+                  setEditingBody(false)
+                  dispatch({ type: 'setAnalyzing', value })
                 }}
-              >
-                Comparar posturas <ArrowDown size={16} aria-hidden />
-              </button>
-              <p className="pose-explanation">
-                <strong>{observed.label}.</strong> La vertical de la barra pasa a{' '}
-                <b>{formatBarArm(observed.barArmM)}</b> de la articulación. El peso de la barra
-                aporta <b>{formatMoment(observed.barMomentNm)}</b>
-                {observed.id === 'l5s1' ? ' al tronco' : ' por pierna'}.
-              </p>
-              {mode === 'anatomy' && !editingBody && mechanics.forces && (
-                <ForceReadingGuide
-                  focus={mechanics.focus}
-                  onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
-                  loadPath={mechanics.loadPath}
-                  feetReaction={frame.kinetics.systemWeight}
-                />
+              />
+              {analyzing && !editingBody && (
+                <>
+                  <p className="pose-explanation">
+                    <strong>{observed.label}.</strong> La vertical de la barra pasa a{' '}
+                    <b>{formatBarArm(observed.barArmM)}</b> de la articulación. El peso de la barra
+                    aporta <b>{formatMoment(observed.barMomentNm)}</b>
+                    {observed.id === 'l5s1' ? ' al tronco' : ' por pierna'}.
+                  </p>
+                  {mode === 'anatomy' && !editingBody && mechanics.forces && (
+                    <ForceReadingGuide
+                      focus={mechanics.focus}
+                      onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
+                      loadPath={mechanics.loadPath}
+                      feetReaction={frame.kinetics.systemWeight}
+                    />
+                  )}
+                </>
               )}
               {mode === 'diagram' && (
                 <p className="diagram-help">
@@ -572,136 +583,140 @@ function StandingLab() {
                 </div>
               )}
             </section>
-            <dl className="pose-readings atlas-card">
-              <div>
-                <dt>Flexión de cadera</dt>
-                <dd>
-                  {Math.round(frame.angles.hipFlexion)}
-                  <small>°</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Flexión de rodilla</dt>
-                <dd>
-                  {Math.round(frame.angles.kneeFlexion)}
-                  <small>°</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Trabajo del ascenso</dt>
-                <dd>
-                  {Math.round(series.work).toLocaleString('es-AR')} <small>J</small>
-                </dd>
-              </div>
-            </dl>
-          </div>
-          <StudyGuide
-            tabs={[
-              { id: 'posturas', label: 'Posturas' },
-              { id: 'momentos', label: 'Articulaciones' },
-              { id: 'fuerzas', label: 'Fuerzas' },
-              { id: 'musculos', label: 'Músculos' },
-            ]}
-            value={guide}
-            onChange={setGuide}
-          >
-            {guide === 'posturas' && (
-              <StanceComparison
-                exercise={exercise}
-                anthro={solvedAnthro}
-                task={seriesTask}
-                coordination={solvedCoordination}
-                frame={frame}
-                series={series}
-                progress={task.progress}
-                range={progressRange}
-                onJoint={(joint) => {
-                  setEditingBody(false)
-                  selectJoint(joint)
-                  if (!unavailable) setMode('anatomy')
-                  if (window.matchMedia('(max-width: 790px)').matches) {
-                    document.getElementById('lift-viewport')?.focus()
-                  }
-                }}
-              />
+            {analyzing && !editingBody && (
+              <dl className="pose-readings atlas-card">
+                <div>
+                  <dt>Flexión de cadera</dt>
+                  <dd>
+                    {Math.round(frame.angles.hipFlexion)}
+                    <small>°</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Flexión de rodilla</dt>
+                  <dd>
+                    {Math.round(frame.angles.kneeFlexion)}
+                    <small>°</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Trabajo del ascenso</dt>
+                  <dd>
+                    {Math.round(series.work).toLocaleString('es-AR')} <small>J</small>
+                  </dd>
+                </div>
+              </dl>
             )}
-            {guide === 'momentos' && (
-              <section className="atlas-card moments-card" aria-labelledby="moment-title">
-                <h2 id="moment-title" className="rail-title">
-                  <ChartSpline size={18} aria-hidden /> Momentos articulares
-                </h2>
-                <p className="rail-intro moment-intro">
-                  Los arcos muestran el momento interno que equilibra la postura. Elegí una
-                  articulación para medir su distancia a la línea de la barra.
-                </p>
-                <MomentPanel
-                  series={series}
+          </div>
+          {analyzing && !editingBody && (
+            <StudyGuide
+              tabs={[
+                { id: 'posturas', label: 'Posturas' },
+                { id: 'momentos', label: 'Articulaciones' },
+                { id: 'fuerzas', label: 'Fuerzas' },
+                { id: 'musculos', label: 'Músculos' },
+              ]}
+              value={guide}
+              onChange={setGuide}
+            >
+              {guide === 'posturas' && (
+                <StanceComparison
+                  exercise={exercise}
+                  anthro={solvedAnthro}
+                  task={seriesTask}
+                  coordination={solvedCoordination}
                   frame={frame}
+                  series={series}
                   progress={task.progress}
-                  curves={state.showCurves}
-                  selected={mechanics.joint}
-                  onSelectJoint={(joint) => {
+                  range={progressRange}
+                  onJoint={(joint) => {
                     setEditingBody(false)
                     selectJoint(joint)
                     if (!unavailable) setMode('anatomy')
+                    if (window.matchMedia('(max-width: 790px)').matches) {
+                      document.getElementById('lift-viewport')?.focus()
+                    }
                   }}
                 />
-                {focus && (
-                  <div className="joint-detail">
-                    <strong>
-                      {focus.label} · {focus.action}
-                    </strong>
-                    <dl>
-                      <div>
-                        <dt>Brazo de la barra</dt>
-                        <dd>{formatBarArm(focus.barArmM)}</dd>
-                      </div>
-                      <div>
-                        <dt>Aporte de la barra</dt>
-                        <dd>{formatMoment(focus.barMomentNm)}</dd>
-                      </div>
-                      <div>
-                        <dt>Aporte de los segmentos</dt>
-                        <dd>{formatMoment(focus.bodyMomentNm)}</dd>
-                      </div>
-                    </dl>
-                    <p>
-                      El momento neto suma ambos aportes. El signo positivo indica{' '}
-                      {focus.id === 'ankle' ? 'flexión plantar' : 'extensión'}.
-                    </p>
-                  </div>
-                )}
-              </section>
-            )}
-            {guide === 'fuerzas' && (
-              <ForceBalance
-                forces={overlay.forces}
-                note={
-                  exercise === 'deadlift'
-                    ? 'En el despegue, el modelo supone que las manos ya sostienen todo el peso de la barra.'
-                    : 'La reacción total bajo ambos pies equilibra el peso del cuerpo y el de la barra.'
-                }
-              />
-            )}
-            {guide === 'musculos' && (
-              <MuscleAtlas
-                frame={frame}
-                exercise={exercise}
-                selected={muscle}
-                onSelect={chooseMuscle}
-                onShowModel={
-                  mode === 'anatomy'
-                    ? () => document.getElementById('lift-viewport')?.focus()
-                    : undefined
-                }
-              />
-            )}
-          </StudyGuide>
+              )}
+              {guide === 'momentos' && (
+                <section className="atlas-card moments-card" aria-labelledby="moment-title">
+                  <h2 id="moment-title" className="rail-title">
+                    <ChartSpline size={18} aria-hidden /> Momentos articulares
+                  </h2>
+                  <p className="rail-intro moment-intro">
+                    Los arcos muestran el momento interno que equilibra la postura. Elegí una
+                    articulación para medir su distancia a la línea de la barra.
+                  </p>
+                  <MomentPanel
+                    series={series}
+                    frame={frame}
+                    progress={task.progress}
+                    curves={state.showCurves}
+                    selected={mechanics.joint}
+                    onSelectJoint={(joint) => {
+                      setEditingBody(false)
+                      selectJoint(joint)
+                      if (!unavailable) setMode('anatomy')
+                    }}
+                  />
+                  {focus && (
+                    <div className="joint-detail">
+                      <strong>
+                        {focus.label} · {focus.action}
+                      </strong>
+                      <dl>
+                        <div>
+                          <dt>Brazo de la barra</dt>
+                          <dd>{formatBarArm(focus.barArmM)}</dd>
+                        </div>
+                        <div>
+                          <dt>Aporte de la barra</dt>
+                          <dd>{formatMoment(focus.barMomentNm)}</dd>
+                        </div>
+                        <div>
+                          <dt>Aporte de los segmentos</dt>
+                          <dd>{formatMoment(focus.bodyMomentNm)}</dd>
+                        </div>
+                      </dl>
+                      <p>
+                        El momento neto suma ambos aportes. El signo positivo indica{' '}
+                        {focus.id === 'ankle' ? 'flexión plantar' : 'extensión'}.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              )}
+              {guide === 'fuerzas' && (
+                <ForceBalance
+                  forces={overlay.forces}
+                  note={
+                    exercise === 'deadlift'
+                      ? 'En el despegue, el modelo supone que las manos ya sostienen todo el peso de la barra.'
+                      : 'La reacción total bajo ambos pies equilibra el peso del cuerpo y el de la barra.'
+                  }
+                />
+              )}
+              {guide === 'musculos' && (
+                <MuscleAtlas
+                  frame={frame}
+                  exercise={exercise}
+                  selected={muscle}
+                  onSelect={chooseMuscle}
+                  onShowModel={
+                    mode === 'anatomy'
+                      ? () => document.getElementById('lift-viewport')?.focus()
+                      : undefined
+                  }
+                />
+              )}
+            </StudyGuide>
+          )}
         </div>
-        <LabFooter />
       </main>
       <SettingsDialog open={panelOpen} onClose={() => setPanelOpen(false)}>
         {panels}
+        <LabFooter />
       </SettingsDialog>
     </div>
   )
