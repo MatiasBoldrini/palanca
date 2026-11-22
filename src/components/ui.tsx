@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import { useId, useState, type ReactNode } from 'react'
 
 interface SliderProps {
+  id?: string
   label: string
   value: number
   min: number
@@ -15,6 +16,7 @@ interface SliderProps {
 }
 
 export function Slider({
+  id: providedId,
   label,
   value,
   min,
@@ -26,7 +28,8 @@ export function Slider({
   accent,
   marks,
 }: SliderProps) {
-  const id = useId()
+  const generatedId = useId()
+  const id = providedId ?? generatedId
   const pct = ((value - min) / (max - min)) * 100
   return (
     <div className="slider">

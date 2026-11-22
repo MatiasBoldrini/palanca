@@ -51,25 +51,32 @@ export function LabHeader({
 
 export function ExerciseHeading({
   name,
-  description,
   load,
+  onLoadClick,
 }: {
   name: string
-  description: string
   load: number
+  onLoadClick: () => void
 }) {
   return (
     <header className="exercise-head">
-      <div>
-        <h1>{name}</h1>
-        <p>{description}</p>
-      </div>
-      <div className="bar-load">
-        <Weight size={19} strokeWidth={1.5} aria-hidden />
+      <h1>{name}</h1>
+      <button
+        type="button"
+        className="load-control"
+        onClick={() => {
+          onLoadClick()
+          requestAnimationFrame(() => document.getElementById('settings-load')?.focus())
+        }}
+        aria-haspopup="dialog"
+        aria-label={`Ajustar carga de la barra, ${load} kg`}
+      >
+        <Weight size={16} aria-hidden />
         <span>
-          Carga en barra<strong className="num">{load.toLocaleString('es-AR')} kg</strong>
+          <small>Carga en barra</small>
+          <strong>{load.toLocaleString('es-AR')} kg</strong>
         </span>
-      </div>
+      </button>
     </header>
   )
 }

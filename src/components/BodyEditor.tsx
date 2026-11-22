@@ -1,13 +1,4 @@
-import { ScanLine } from 'lucide-react'
 import type { ReactNode } from 'react'
-
-export function BodyEditToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" className="body-edit-toggle" aria-pressed={active} onClick={onClick}>
-      <ScanLine size={16} aria-hidden /> Ajustar cuerpo
-    </button>
-  )
-}
 
 export function BodyEditor<K extends string>({
   options,

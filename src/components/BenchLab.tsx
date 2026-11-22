@@ -1,12 +1,12 @@
-import { Bone, BookOpen, Box, ChartSpline, Layers3, Spline } from 'lucide-react'
+import { BookOpen, ChartSpline, ChevronDown } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { usePlayback } from '../hooks/useAnimationEngine'
 import { BENCH_GRIP, buildBenchFrame, type BenchJointId } from '../model/bench'
 import { formatBarArm, formatMoment } from '../model/mechanicsOverlay'
-import { useApp, useShareLink } from '../state/appState'
+import { useApp } from '../state/appState'
 import { ForceReadingGuide } from './ForceReadingGuide'
 import { BENCH_JOINTS, benchForces } from '../model/benchOverlay'
-import { BodyEditor, BodyEditToggle } from './BodyEditor'
+import { BodyEditor } from './BodyEditor'
 import { BENCH_PARTS, type BenchPartId } from '../model/bodyEditing'
 import { PARAM_LIMITS } from '../model/interact'
 import { PARAM_UI } from './params'
@@ -14,12 +14,21 @@ import { BenchDiagram } from './BenchDiagram'
 import { ExerciseHeading, LabFooter, LabHeader } from './LabHeader'
 import { LiftTransport } from './LiftTransport'
 import { ForceBalance, MechanicsControls } from './MechanicsControls'
+import { SharePosture } from './SharePosture'
 import { SettingsDialog } from './SettingsDialog'
 import { Slider } from './ui'
+import { StudyGuide } from './StudyGuide'
 import { ViewerBoundary } from './ViewerBoundary'
+import { ViewerToolbar } from './ViewerToolbar'
+import './benchGrip.css'
 
 const BenchViewer = lazy(() => import('./BenchViewer'))
 const RANGE = { min: 0, max: 1 }
+const GUIDE_TABS = [
+  { id: 'momentos', label: 'Articulaciones' },
+  { id: 'fuerzas', label: 'Fuerzas' },
+  { id: 'musculos', label: 'Músculos' },
+]
 const JOINT_HELP = {
   shoulder:
     'Desde los pies se ve la separación lateral entre el hombro y la mano. Cambiá el ancho de agarre y observá cómo varía esa distancia.',
@@ -31,13 +40,12 @@ const JOINT_HELP = {
 
 export function BenchLab() {
   const { state, dispatch } = useApp()
-  const share = useShareLink()
   const { anthro, task, bench, mechanics } = state
   const [mode, setMode] = useState<'anatomy' | 'diagram'>('anatomy')
   const [layer, setLayer] = useState<'muscles' | 'skeleton'>('muscles')
   const [unavailable, setUnavailable] = useState(false)
   const [settings, setSettings] = useState(false)
-  const [shared, setShared] = useState(false)
+  const [guide, setGuide] = useState('momentos')
   const [editingBody, setEditingBody] = useState(false)
   const [editForces, setEditForces] = useState(false)
   const [editPart, setEditPart] = useState<BenchPartId>('arm')
@@ -84,6 +92,7 @@ export function BenchLab() {
   const selectJoint = useCallback(
     (value: BenchJointId | 'all') => {
       setEditingBody(false)
+      setGuide('momentos')
       dispatch({ type: 'setBench', patch: { joint: value } })
       dispatch({ type: 'setMechanics', patch: { moments: true, focus: 'all' } })
     },
@@ -117,7 +126,6 @@ export function BenchLab() {
       step={0.05}
       format={(v) => formatBarArm(2 * arm.grip.z) + ' · ' + v.toLocaleString('es-AR') + '× hombros'}
       onChange={(v) => dispatch({ type: 'setBench', patch: { gripRatio: v } })}
-      hint="La distancia entre las manos se expresa en múltiplos del ancho de hombros."
     />
   )
   const partSettings =
@@ -156,7 +164,10 @@ export function BenchLab() {
         <ExerciseHeading
           name="Press de banca"
           load={task.load}
-          description="Observá cuánto sostienen el banco y los pies a medida que la barra sube desde el pecho."
+          onLoadClick={() => {
+            stop()
+            setSettings(true)
+          }}
         />
         <div
           className="atlas-layout"
@@ -170,58 +181,48 @@ export function BenchLab() {
               aria-label="Simulador del levantamiento"
               data-force-focus={mechanics.forces && !editingBody ? mechanics.focus : 'all'}
             >
-              <div className="view-toolbar">
-                <div className="view-modes" role="group" aria-label="Representación">
-                  <button
-                    aria-pressed={mode === 'anatomy'}
-                    onClick={() => {
-                      setMode('anatomy')
-                      setUnavailable(false)
-                    }}
-                  >
-                    <Box size={16} aria-hidden />
-                    Anatomía 3D
-                  </button>
-                  <button
-                    aria-pressed={mode === 'diagram'}
-                    onClick={() => {
-                      setMode('diagram')
-                      setUnavailable(false)
-                    }}
-                  >
-                    <Spline size={16} aria-hidden />
-                    Diagrama 2D
-                  </button>
-                </div>
-                <div className="viewer-actions">
-                  <BodyEditToggle
-                    active={editingBody}
-                    onClick={() => {
-                      stop()
-                      setEditingBody(!editingBody)
-                    }}
+              <ViewerToolbar
+                mode={mode}
+                onMode={(next) => {
+                  setMode(next)
+                  setUnavailable(false)
+                }}
+                layer={layer}
+                onLayer={setLayer}
+                editingBody={editingBody}
+                canEdit
+                onEdit={() => {
+                  stop()
+                  setEditingBody(!editingBody)
+                }}
+              >
+                {!editingBody && (
+                  <MechanicsControls<BenchJointId>
+                    {...mechanics}
+                    options={BENCH_JOINTS}
+                    joint={selected}
+                    onJoint={selectJoint}
+                    onLoadPath={() =>
+                      dispatch({
+                        type: 'setMechanics',
+                        patch: {
+                          forces: true,
+                          loadPath: !mechanics.forces || !mechanics.loadPath,
+                        },
+                      })
+                    }
+                    onForces={() =>
+                      dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
+                    }
+                    onMoments={() =>
+                      dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
+                    }
+                    onLever={() =>
+                      dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
+                    }
                   />
-                  {mode === 'anatomy' && (
-                    <label className="layer-picker">
-                      {layer === 'muscles' ? (
-                        <Layers3 size={15} aria-hidden />
-                      ) : (
-                        <Bone size={15} aria-hidden />
-                      )}
-                      <select
-                        aria-label="Capa anatómica"
-                        value={layer}
-                        onChange={(e) =>
-                          setLayer(e.target.value === 'skeleton' ? 'skeleton' : 'muscles')
-                        }
-                      >
-                        <option value="muscles">Músculos</option>
-                        <option value="skeleton">Esqueleto</option>
-                      </select>
-                    </label>
-                  )}
-                </div>
-              </div>
+                )}
+              </ViewerToolbar>
               {editingBody ? (
                 <BodyEditor
                   editForces={editForces}
@@ -236,30 +237,14 @@ export function BenchLab() {
                   {partSettings}
                 </BodyEditor>
               ) : (
-                <MechanicsControls<BenchJointId>
-                  {...mechanics}
-                  options={BENCH_JOINTS}
-                  joint={selected}
-                  onJoint={selectJoint}
-                  onLoadPath={() =>
-                    dispatch({
-                      type: 'setMechanics',
-                      patch: {
-                        forces: true,
-                        loadPath: !mechanics.forces || !mechanics.loadPath,
-                      },
-                    })
-                  }
-                  onForces={() =>
-                    dispatch({ type: 'setMechanics', patch: { forces: !mechanics.forces } })
-                  }
-                  onMoments={() =>
-                    dispatch({ type: 'setMechanics', patch: { moments: !mechanics.moments } })
-                  }
-                  onLever={() =>
-                    dispatch({ type: 'setMechanics', patch: { lever: !mechanics.lever } })
-                  }
-                />
+                <details className="bench-grip-menu">
+                  <summary>
+                    <span>Agarre</span>
+                    <b>{formatBarArm(2 * arm.grip.z)} entre manos</b>
+                    <ChevronDown size={15} aria-hidden />
+                  </summary>
+                  <div className="bench-grip-control">{gripSlider}</div>
+                </details>
               )}
               {unavailable && (
                 <p className="fallback-note" role="status">
@@ -308,15 +293,6 @@ export function BenchLab() {
                   />
                 )}
               </div>
-              {!editingBody && mechanics.forces && (
-                <ForceReadingGuide
-                  focus={mechanics.focus}
-                  onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
-                  loadPath={mechanics.loadPath}
-                  benchReaction={frame.forces.benchN}
-                  feetReaction={frame.forces.feetN}
-                />
-              )}
               <LiftTransport
                 marker="Barra"
                 height={frame.bar.y}
@@ -342,85 +318,99 @@ export function BenchLab() {
                 peso de la barra genera{' '}
                 <b>{formatMoment((armLength * Math.abs(frame.forces.barN)) / 2)}</b> por brazo.
               </p>
-            </section>
-            {!editingBody && <section className="atlas-card bench-grip">{gripSlider}</section>}
-          </div>
-          <aside className="atlas-rail" aria-label="Guía del movimiento">
-            <section className="atlas-card moments-card">
-              <h2 className="rail-title">
-                <ChartSpline size={18} aria-hidden />
-                Momentos articulares
-              </h2>
-              <p className="rail-intro">
-                Cada arco representa el giro interno que equilibra la carga sobre un brazo. Elegí
-                una articulación para ver su palanca.
-              </p>
-              <div className="moment-panel">
-                {BENCH_JOINTS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    className="moment-chart"
-                    aria-pressed={selected === id}
-                    onClick={() => selectJoint(id)}
-                  >
-                    <span className="moment-label">{label}</span>
-                    <span className="moment-value">
-                      {formatMoment(arm.moments[id].magnitudeNm)}
-                    </span>
-                    {state.showCurves && (
-                      <svg viewBox="0 0 100 29" preserveAspectRatio="none" aria-hidden="true">
-                        <path d={curves[id]} fill="none" stroke="#886696" strokeWidth="1.6" />
-                        <circle
-                          cx={100 * bench.progress}
-                          cy={26 - (23 * arm.moments[id].magnitudeNm) / peak}
-                          r="2.4"
-                          fill="#754493"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <p className="moment-note">
-                Magnitud total por brazo. El peso de la barra se reparte por igual entre las manos.
-              </p>
-              {joint && (
-                <div className="joint-detail">
-                  <strong>{BENCH_JOINTS.find((j) => j.id === joint)?.label}</strong>
-                  <dl>
-                    <div>
-                      <dt>Brazo de la carga en la mano</dt>
-                      <dd>
-                        {formatBarArm(
-                          Math.hypot(arm[joint].x - arm.grip.x, arm[joint].z - arm.grip.z),
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                  <p>{JOINT_HELP[joint]}</p>
-                </div>
+              {!editingBody && mechanics.forces && (
+                <ForceReadingGuide
+                  focus={mechanics.focus}
+                  onFocus={(focus) => dispatch({ type: 'setMechanics', patch: { focus } })}
+                  loadPath={mechanics.loadPath}
+                  benchReaction={frame.forces.benchN}
+                  feetReaction={frame.forces.feetN}
+                />
               )}
             </section>
-            <ForceBalance
-              forces={benchForces(frame)}
-              note="Las reacciones del banco y de los pies equilibran el peso del cuerpo y el de la barra."
-            />
-            <section className="atlas-card moments-card">
-              <h2 className="rail-title">
-                <BookOpen size={18} aria-hidden />
-                Qué observar
-              </h2>
-              <p className="rail-intro">
-                Pausá en el pecho, elegí Hombro y cambiá el agarre. Girá la cámara hacia los pies
-                para ver la distancia lateral entre mano y hombro.
-              </p>
-              <p className="moment-note">
-                El pectoral mayor actúa sobre el hombro y el tríceps extiende el codo. Para comparar
-                sus articulaciones, fijate cuánto se aleja la vertical de la mano de cada una al
-                bajar.
-              </p>
-            </section>
-          </aside>
+          </div>
+          <StudyGuide tabs={GUIDE_TABS} value={guide} onChange={setGuide}>
+            {guide === 'momentos' && (
+              <section className="atlas-card moments-card">
+                <h2 className="rail-title">
+                  <ChartSpline size={18} aria-hidden />
+                  Momentos articulares
+                </h2>
+                <p className="rail-intro">
+                  Cada arco representa el giro interno que equilibra la carga sobre un brazo. Elegí
+                  una articulación para ver su palanca.
+                </p>
+                <div className="moment-panel">
+                  {BENCH_JOINTS.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      className="moment-chart"
+                      aria-pressed={selected === id}
+                      onClick={() => selectJoint(id)}
+                    >
+                      <span className="moment-label">{label}</span>
+                      <span className="moment-value">
+                        {formatMoment(arm.moments[id].magnitudeNm)}
+                      </span>
+                      {state.showCurves && (
+                        <svg viewBox="0 0 100 29" preserveAspectRatio="none" aria-hidden="true">
+                          <path d={curves[id]} fill="none" stroke="#886696" strokeWidth="1.6" />
+                          <circle
+                            cx={100 * bench.progress}
+                            cy={26 - (23 * arm.moments[id].magnitudeNm) / peak}
+                            r="2.4"
+                            fill="#754493"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="moment-note">
+                  Magnitud total por brazo. El peso de la barra se reparte por igual entre las manos.
+                </p>
+                {joint && (
+                  <div className="joint-detail">
+                    <strong>{BENCH_JOINTS.find((j) => j.id === joint)?.label}</strong>
+                    <dl>
+                      <div>
+                        <dt>Brazo de la carga en la mano</dt>
+                        <dd>
+                          {formatBarArm(
+                            Math.hypot(arm[joint].x - arm.grip.x, arm[joint].z - arm.grip.z),
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p>{JOINT_HELP[joint]}</p>
+                  </div>
+                )}
+              </section>
+            )}
+            {guide === 'fuerzas' && (
+              <ForceBalance
+                forces={benchForces(frame)}
+                note="Las reacciones del banco y de los pies equilibran el peso del cuerpo y el de la barra."
+              />
+            )}
+            {guide === 'musculos' && (
+              <section className="atlas-card moments-card">
+                <h2 className="rail-title">
+                  <BookOpen size={18} aria-hidden />
+                  Qué observar
+                </h2>
+                <p className="rail-intro">
+                  Pausá en el pecho, elegí Hombro y cambiá el agarre. Girá la cámara hacia los pies
+                  para ver la distancia lateral entre mano y hombro.
+                </p>
+                <p className="moment-note">
+                  El pectoral mayor actúa sobre el hombro y el tríceps extiende el codo. Para comparar
+                  sus articulaciones, fijate cuánto se aleja la vertical de la mano de cada una al
+                  bajar.
+                </p>
+              </section>
+            )}
+          </StudyGuide>
         </div>
         <LabFooter bench />
       </main>
@@ -428,6 +418,7 @@ export function BenchLab() {
         <section className="section">
           <h3>Barra y cuerpo</h3>
           <Slider
+            id="settings-load"
             label="Carga de la barra"
             min={20}
             max={400}
@@ -465,12 +456,7 @@ export function BenchLab() {
             .
           </p>
         </section>
-        <button
-          className="icon-button share-in-panel"
-          onClick={async () => setShared(await share())}
-        >
-          {shared ? 'Enlace copiado' : 'Compartir enlace'}
-        </button>
+        <SharePosture />
       </SettingsDialog>
     </div>
   )

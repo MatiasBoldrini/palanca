@@ -1,10 +1,7 @@
 .bench-label-surface {
   position: absolute;
-  inset: 0 0 51px;
+  inset: 0 0 var(--camera-rail-height);
   pointer-events: none;
-}
-.bench-viewer .anatomy-surface {
-  bottom: 51px;
 }
 .bench-arm-value {
   font: 650 12px var(--font-sans, sans-serif);

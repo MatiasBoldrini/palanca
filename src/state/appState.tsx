@@ -43,14 +43,14 @@ export interface AppState {
 
 const initialState: AppState = {
   benchActive: false,
-  bench: { progress: 1, gripRatio: 1.5, joint: 'all' },
+  bench: { progress: 1, gripRatio: 1.5, joint: 'shoulder' },
   mechanics: {
     focus: 'all',
     forces: true,
     loadPath: true,
     moments: true,
     lever: true,
-    joint: 'all',
+    joint: 'hip',
   },
   exercise: 'deadlift',
   anthro: DEFAULT_ANTHROPOMETRY,
@@ -378,19 +378,32 @@ export function useApp(): Store {
   return store
 }
 
-export function useShareLink(): () => Promise<boolean> {
+export function useShareLink() {
   const { state } = useApp()
-  return useCallback(async () => {
-    const url = `${window.location.origin}${window.location.pathname}#s=${encode(state)}`
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Palanca', url })
-        return true
-      }
-      await navigator.clipboard.writeText(url)
-      return true
-    } catch {
-      return false
-    }
+  const url = useMemo(() => {
+    const link = new URL(window.location.href)
+    link.hash = 's=' + encode(state)
+    return link.href
   }, [state])
+
+  const share = useCallback(async (): Promise<'shared' | 'copied' | 'manual' | 'cancelled'> => {
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'Palanca', url })
+        return 'shared'
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
+      }
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+        return 'copied'
+      }
+    } catch {
+      // Browsers may expose the clipboard and still deny this page access.
+    }
+    return 'manual'
+  }, [url])
+  return { url, share }
 }

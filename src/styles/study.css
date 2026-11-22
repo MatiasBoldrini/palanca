@@ -1,0 +1,372 @@
+/* Keep the anatomy, its playback controls and the selected stance together. */
+.atlas-header-inner {
+  min-height: 56px;
+}
+.atlas-layout {
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) clamp(316px, 29vw, 400px);
+}
+.lift-column {
+  gap: 12px;
+}
+.exercise-head {
+  padding-block: 20px;
+}
+.exercise-head h1 {
+  font-size: clamp(36px, 3.5vw, 52px);
+  letter-spacing: -0.03em;
+}
+.load-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+}
+.load-control span {
+  display: grid;
+  text-align: left;
+}
+.load-control small {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
+.load-control strong {
+  line-height: 18px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.load-control:hover {
+  background: var(--soft);
+}
+
+.viewer-tools {
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+.viewer-tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 12px;
+}
+.render-mode,
+.viewer-tool-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.render-mode button,
+.viewer-tool-actions button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.render-mode button {
+  gap: 3px;
+}
+.render-mode button[aria-pressed='true'],
+.viewer-tool-actions :is([aria-pressed='true'], [aria-expanded='true']),
+.viewer-tool-row button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.viewer-tool-actions .edit-tool {
+  border: 1px solid var(--rule);
+}
+.viewer-layer-panel:not([hidden]) {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--rule);
+  padding: 8px 12px;
+}
+.tissue-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.tissue-picker span {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+.tissue-picker select {
+  appearance: none;
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  padding: 0 28px 0 8px;
+  min-height: 36px;
+  font: inherit;
+}
+.tissue-picker svg {
+  pointer-events: none;
+  position: absolute;
+  right: 8px;
+}
+.viewer-layer-panel .mechanics-tools {
+  padding: 0;
+  border: 0;
+}
+.viewer-layer-panel .mechanics-tools button[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--soft);
+  border-color: var(--muted);
+}
+.viewer-layer-panel .joint-picker > span {
+  position: static;
+  clip-path: none;
+  width: auto;
+  height: auto;
+}
+
+.lift-transport {
+  padding: 8px 16px 4px;
+  gap: 12px;
+}
+.atlas-play {
+  width: 44px;
+  height: 44px;
+}
+.atlas-speed {
+  min-width: 44px;
+  height: 44px;
+}
+.phase-stops {
+  padding: 0 16px 8px;
+  gap: 4px;
+}
+.phase-stops button {
+  min-height: 36px;
+  padding-inline: 12px;
+}
+.pose-explanation {
+  padding: 12px 16px;
+}
+.force-disclosure {
+  border-top: 1px solid var(--rule);
+}
+.force-disclosure summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.force-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+.force-disclosure summary > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.force-disclosure summary > svg {
+  margin-left: auto;
+}
+.force-disclosure[open] summary > svg {
+  transform: rotate(180deg);
+}
+.force-disclosure .force-reading-guide {
+  padding: 0 16px 12px;
+  border: 0;
+}
+.force-filter button {
+  min-height: 36px;
+}
+
+.study-guide {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+.study-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--rule);
+  padding-inline: 8px;
+}
+.study-tabs button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  font-size: 13px;
+  padding-inline: 4px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.study-tabs button[aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--muscle-ink);
+  font-weight: 600;
+}
+.study-guide [role='tabpanel'] > .atlas-card {
+  border: 0;
+  background: none;
+}
+.study-guide .rail-title > svg {
+  display: none;
+}
+.study-guide .rail-title {
+  font-size: 24px;
+}
+.study-guide .rail-intro {
+  font-size: 14px;
+}
+.study-guide .moment-chart {
+  min-height: 44px;
+}
+.pose-readings {
+  border: 0;
+  background: none;
+  padding: 8px 0;
+}
+.pose-readings dd {
+  font-size: 24px;
+}
+.pose-readings div:first-child {
+  padding-left: 0;
+}
+.guide-jump {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  width: 100%;
+  border-top: 1px solid var(--rule);
+  padding: 0 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+@media (max-width: 790px) {
+  .atlas-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .guide-jump {
+    display: flex;
+  }
+  .atlas-header-inner,
+  .atlas-main {
+    padding-inline: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .atlas-header-inner {
+    padding-block: 4px;
+    gap: 0 8px;
+  }
+  .atlas-header .segment {
+    min-height: 44px;
+    padding-block: 4px;
+  }
+  .settings-open {
+    min-height: 44px;
+    padding: 4px 8px;
+    border: 0;
+  }
+  .atlas-header .segmented {
+    padding: 0;
+  }
+  .atlas-brand strong {
+    font-size: 20px;
+  }
+  .exercise-head {
+    align-items: center;
+    padding-block: 12px;
+  }
+  .exercise-head h1 {
+    font-size: clamp(30px, 7.7vw, 36px);
+  }
+  .lift-column {
+    gap: 8px;
+  }
+  .viewer-tool-row {
+    gap: 4px;
+    padding: 2px 6px;
+  }
+  .mode-name {
+    display: none;
+  }
+  .render-mode,
+  .viewer-tool-actions {
+    gap: 2px;
+  }
+  .render-mode button,
+  .viewer-tool-actions button {
+    min-height: 44px;
+    min-width: 44px;
+    padding-inline: 8px;
+  }
+  .viewer-tool-actions button {
+    font-size: 12px;
+  }
+  .viewer-layer-panel :is(button, select) {
+    min-height: 44px;
+  }
+  .atlas-viewport {
+    height: clamp(308px, 48svh, 436px);
+    min-height: 0;
+  }
+  .lift-transport {
+    padding: 8px 12px 0;
+  }
+  .timeline input {
+    min-height: 32px;
+  }
+  .phase-stops {
+    padding: 0 12px 4px;
+  }
+  .phase-stops button,
+  .force-filter button {
+    min-height: 44px;
+  }
+  .study-tabs {
+    padding-inline: 4px;
+  }
+  .study-guide [role='tabpanel'] > section {
+    padding: 16px;
+  }
+  .pose-readings dt {
+    font-size: 12px;
+  }
+}
+@media (max-width: 355px) {
+  .atlas-main,
+  .atlas-header-inner {
+    padding-inline: 8px;
+  }
+  .viewer-tool-actions button {
+    padding-inline: 6px;
+  }
+}
+
+.rotate-hint { display: inline-flex; align-items: center; gap: 4px; }
+@media (max-width: 600px) {
+  .atlas-viewport .model-hint { max-width: calc(100% - 240px); bottom: 19px; }
+  .atlas-viewport .model-hint svg { display: inline; }
+  .model-hint .hint-group, .rotate-hint .hint-long { display: none; }
+}

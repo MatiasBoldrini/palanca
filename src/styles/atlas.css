@@ -134,34 +134,13 @@ body {
   font-size: 15px;
   color: var(--muted);
 }
-.bar-load {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-  padding: 4px 1px 4px 24px;
-  border-left: 1px solid var(--rule);
-  color: var(--muted);
-}
-.bar-load span {
-  display: grid;
-  gap: 3px;
-  font-size: 12px;
-}
-.bar-load strong {
-  color: var(--ink);
-  font-size: 19px;
-  line-height: 1.1;
-  font-weight: 600;
-}
 .atlas-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(285px, 26vw, 345px);
   gap: clamp(14px, 1.7vw, 24px);
   align-items: start;
 }
-.lift-column,
-.atlas-rail {
+.lift-column {
   display: grid;
   gap: 15px;
   min-width: 0;
@@ -173,56 +152,6 @@ body {
 }
 .viewer-card {
   overflow: hidden;
-}
-.view-toolbar {
-  min-height: 53px;
-  padding: 8px clamp(10px, 1.5vw, 20px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  border-bottom: 1px solid var(--rule);
-}
-.view-modes {
-  display: flex;
-  gap: 2px;
-}
-.view-modes button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  white-space: nowrap;
-  padding: 7px 10px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 550;
-  border-radius: 6px;
-}
-.view-modes button:hover,
-.view-modes [aria-pressed='true'] {
-  background: var(--soft);
-  color: var(--ink);
-}
-.view-modes [aria-pressed='true'] svg {
-  color: var(--muscle-ink);
-}
-.layer-picker {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding-left: 8px;
-  border-left: 1px solid var(--rule);
-  color: var(--muted);
-}
-.layer-picker select {
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 2px;
-  background: var(--card);
-  border: 0;
-  cursor: pointer;
 }
 .atlas-viewport {
   position: relative;
@@ -581,10 +510,6 @@ html:has(.settings-dialog[open]) {
   .atlas-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  .atlas-rail {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
   .atlas-viewport {
     height: clamp(355px, 54dvh, 560px);
   }
@@ -629,42 +554,8 @@ html:has(.settings-dialog[open]) {
     font-size: 13px;
     margin-top: 6px;
   }
-  .bar-load {
-    padding: 2px 0 2px 12px;
-    gap: 0;
-  }
-  .bar-load > svg {
-    display: none;
-  }
-  .bar-load span {
-    font-size: 11px;
-  }
-  .bar-load strong {
-    font-size: 16px;
-  }
   .atlas-viewport {
     height: clamp(330px, 47dvh, 490px);
-  }
-  .atlas-rail {
-    grid-template-columns: 1fr;
-  }
-  .view-toolbar {
-    padding-inline: 7px;
-    min-height: 46px;
-  }
-  .view-modes {
-    gap: 0;
-  }
-  .view-modes button {
-    font-size: 12px;
-    gap: 4px;
-    padding-inline: 7px;
-  }
-  .layer-picker {
-    padding-left: 4px;
-  }
-  .layer-picker select {
-    font-size: 12px;
   }
   .lift-transport {
     padding: 10px 12px;
@@ -687,9 +578,6 @@ html:has(.settings-dialog[open]) {
   }
 }
 @media (max-width: 365px) {
-  .layer-picker > svg {
-    display: none;
-  }
   .atlas-main {
     padding-inline: 9px;
   }

@@ -205,6 +205,7 @@ export function TaskPanel() {
   return (
     <Section title="Tarea">
       <Slider
+        id="settings-load"
         label="Carga en la barra"
         value={task.load}
         min={20}

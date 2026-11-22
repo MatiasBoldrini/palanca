@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronDown, Minus, Orbit, Plus } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { touchCameraHint, ViewerCameraControls } from '../anatomy/viewerCameraControls'
 import { createAnatomicalBody, type MuscleId } from '../anatomy/body'
 import { createMechanicsDrawing, FORCE_LENGTH_IN_HEIGHTS } from '../anatomy/mechanicsDrawing'
 import { createBodyPartDrawing } from '../anatomy/bodyPartDrawing'
@@ -187,7 +187,7 @@ function createStudio(
   const loadPath = createLoadPathDrawing(host)
   const drawing = createMechanicsDrawing(host, (id) => data().onSelectJoint(id))
   const bodyParts = createBodyPartDrawing<HotspotId>(host, (part) => data().onEditPart?.(part))
-  const controls = new OrbitControls(camera, canvas)
+  const controls = new ViewerCameraControls(camera, canvas)
   controls.enableDamping = false
   controls.enablePan = false
   controls.minPolarAngle = radians(42)
@@ -797,8 +797,8 @@ export function AnatomyViewer(props: Props) {
       )}
       <div className="anatomy-surface" ref={host} />
       <span id={hint} className="anatomy-sr">
-        Arrastrá o usá las flechas para girar. Con más y menos ajustás el zoom. Inicio restablece la
-        cámara. También podés elegir un grupo en la ficha muscular.
+        {touchCameraHint} Con el teclado, usá las flechas para girar, más y menos para el zoom e
+        Inicio para restablecer la cámara. También podés elegir un grupo en la ficha muscular.
       </span>
       {!ready && (
         <p className="anatomy-loading" role="status">

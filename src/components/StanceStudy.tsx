@@ -1,5 +1,5 @@
-import { ArrowDown, Footprints, GitCompareArrows } from 'lucide-react'
-import { useMemo } from 'react'
+import { ChevronDown, Footprints, GitCompareArrows } from 'lucide-react'
+import { useId, useMemo, useState } from 'react'
 import type { Anthropometry } from '../model/anthropometry'
 import { clamp, lerp } from '../model/geometry'
 import { feasibleRange, type Range } from '../model/interact'
@@ -14,6 +14,7 @@ import {
 import { defaultStanceWidth, getStance, stanceWidthRange } from '../model/stance'
 import { Slider } from './ui'
 import { StanceProfiles } from './StanceProfiles'
+import './StanceStudy.css'
 
 interface SetupProps {
   exercise: ExerciseId
@@ -75,69 +76,69 @@ export function StanceControls({
   const range = stanceWidthRange(exercise, anthro, style)
   const normal = defaultStanceWidth(exercise, anthro.height)
   const wide = wideSquat(anthro)
+  const [widthOpen, setWidthOpen] = useState(false)
+  const widthPanelId = useId()
+  const centimetres = Math.round(stance.width * 100)
   return (
-    <section className="atlas-card stance-tools" aria-label="Base de apoyo">
-      <StanceFootprint width={stance.width} turnout={stance.toeOut} height={anthro.height} />
-      <div className="stance-pattern">
-        <h2>
+    <section className="atlas-card stance-tools stance-bar" aria-label="Base de apoyo">
+      <div className="stance-bar-row">
+        <h2 className="stance-bar-title" aria-label="Base de apoyo">
           <Footprints size={16} aria-hidden />
-          Base de apoyo
+          <span>Base de apoyo</span>
         </h2>
-        <div className="stance-presets" role="group" aria-label="Variante de la base">
-          {deadlift ? (
-            <>
-              <button
-                aria-pressed={style === 'conventional'}
-                onClick={() => onChange({ deadliftStyle: 'conventional', stanceWidth: undefined })}
-              >
-                Convencional
-              </button>
-              <button
-                aria-pressed={style === 'sumo'}
-                onClick={() => onChange({ deadliftStyle: 'sumo', stanceWidth: undefined })}
-              >
-                Sumo
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                aria-pressed={Math.abs(stance.width - normal) < 0.005}
-                onClick={() => onChange({ stanceWidth: undefined })}
-              >
-                Media
-              </button>
-              <button
-                aria-pressed={Math.abs(stance.width - wide) < 0.005}
-                onClick={() => onChange({ stanceWidth: wide })}
-              >
-                Amplia
-              </button>
-            </>
-          )}
+        <div className="stance-choices" role="group" aria-label="Variante de la base">
+          <button
+            type="button"
+            aria-pressed={
+              deadlift ? style === 'conventional' : Math.abs(stance.width - normal) < 0.005
+            }
+            onClick={() =>
+              onChange(deadlift
+                ? { deadliftStyle: 'conventional', stanceWidth: undefined }
+                : { stanceWidth: undefined })
+            }
+          >
+            {deadlift ? 'Convencional' : 'Media'}
+          </button>
+          <button
+            type="button"
+            aria-pressed={deadlift ? style === 'sumo' : Math.abs(stance.width - wide) < 0.005}
+            onClick={() =>
+              onChange(deadlift
+                ? { deadliftStyle: 'sumo', stanceWidth: undefined }
+                : { stanceWidth: wide })
+            }
+          >
+            {deadlift ? 'Sumo' : 'Amplia'}
+          </button>
+        </div>
+        <button
+          type="button"
+          className="stance-width-toggle"
+          aria-controls={widthPanelId}
+          aria-expanded={widthOpen}
+          onClick={() => setWidthOpen(!widthOpen)}
+        >
+          Ancho <b>{centimetres} cm</b> <ChevronDown size={14} aria-hidden />
+        </button>
+      </div>
+      <div id={widthPanelId} className="stance-width-panel" hidden={!widthOpen}>
+        <StanceFootprint width={stance.width} turnout={stance.toeOut} height={anthro.height} />
+        <div className="stance-width-input">
+          <Slider
+            label="Separación entre los pies"
+            min={Math.ceil(range.min * 100)}
+            max={Math.floor(range.max * 100)}
+            value={centimetres}
+            step={1}
+            format={(v) => v + ' cm'}
+            onChange={(v) => onChange({ stanceWidth: v / 100 })}
+          />
+          <p className="stance-toeout">
+            De centro a centro · puntas {Math.round(stance.toeOut)}° hacia afuera
+          </p>
         </div>
       </div>
-      <div className="stance-slider">
-        <Slider
-          label="Separación entre los pies"
-          min={Math.ceil(range.min * 100)}
-          max={Math.floor(range.max * 100)}
-          value={Math.round(stance.width * 100)}
-          step={1}
-          format={(v) => v + ' cm'}
-          onChange={(v) => onChange({ stanceWidth: v / 100 })}
-        />
-        <p className="stance-toeout">
-          De centro a centro · puntas {Math.round(stance.toeOut)}° hacia afuera
-        </p>
-      </div>
-      <button
-        type="button"
-        className="mobile-stance-compare"
-        onClick={() => document.getElementById('stance-comparison')?.focus()}
-      >
-        Comparar posturas <ArrowDown size={14} aria-hidden />
-      </button>
     </section>
   )
 }
@@ -233,44 +234,55 @@ export function StanceComparison({
       <p className="rail-intro">
         Misma carga y proporciones, al {Math.round(fraction * 100)} % del recorrido de cada postura.
       </p>
-      {frame.feasible && ref.feasible && (
-        <StanceProfiles
-          frame={frame}
-          reference={ref}
-          heightM={anthro.height}
-          currentLabel={currentLabel}
-          referenceLabel={alternative.name}
-        />
-      )}
-      {frame.feasible && ref.feasible && (
-        <p className="stance-explanation">
-          El tramo violeta va de la <strong>cadera a la vertical de la barra</strong>. A igual carga,
-          cuanto más largo es ese brazo de palanca, mayor es el momento que la barra ejerce sobre la cadera.
+      {frame.feasible && ref.feasible ? (
+        <>
+          <StanceProfiles
+            frame={frame}
+            reference={ref}
+            heightM={anthro.height}
+            currentLabel={currentLabel}
+            referenceLabel={alternative.name}
+          />
+          <p className="stance-explanation">
+            El tramo violeta va de la <strong>cadera a la vertical de la barra</strong>. A igual carga,
+            cuanto más largo es ese brazo de palanca, mayor es el momento que la barra ejerce sobre la cadera.
+          </p>
+        </>
+      ) : (
+        <p className="moment-note">
+          El modelo no encontró ambas posturas en equilibrio para esta fase del recorrido.
         </p>
       )}
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Medida</th>
-            <th scope="col">Actual</th>
-            <th scope="col">{alternative.name}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, first, second, unit]) => (
-            <tr key={label}>
-              <th scope="row">{label}</th>
-              <td>{frame.feasible ? (Math.round(first) || 0) + unit : '—'}</td>
-              <td>{ref.feasible ? (Math.round(second) || 0) + unit : '—'}</td>
+      <details className="stance-measurements">
+        <summary>
+          <span className="stance-measures-show">Ver medidas</span>
+          <span className="stance-measures-hide">Ocultar medidas</span>
+          <ChevronDown size={14} aria-hidden />
+        </summary>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Medida</th>
+              <th scope="col">Actual</th>
+              <th scope="col">{alternative.name}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="moment-note">
-        {frame.feasible && ref.feasible
-          ? 'El tronco se mide desde la vertical. Los momentos se calculan de perfil y por pierna. Un valor positivo indica demanda de extensión.'
-          : 'Una raya indica que el modelo no encontró una postura en equilibrio para esa configuración.'}
-      </p>
+          </thead>
+          <tbody>
+            {rows.map(([label, first, second, unit]) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                <td>{frame.feasible ? (Math.round(first) || 0) + unit : '—'}</td>
+                <td>{ref.feasible ? (Math.round(second) || 0) + unit : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="moment-note">
+          {frame.feasible && ref.feasible
+            ? 'El tronco se mide desde la vertical. Los momentos se calculan de perfil y por pierna. Un valor positivo indica demanda de extensión.'
+            : 'Una raya indica que el modelo no encontró una postura en equilibrio para esa configuración.'}
+        </p>
+      </details>
       <div className="stance-presets study-joints">
         <button onClick={() => onJoint('hip')}>Seguir cadera</button>
         <button onClick={() => onJoint('knee')}>Seguir rodilla</button>

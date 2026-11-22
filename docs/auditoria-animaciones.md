@@ -44,3 +44,11 @@ En banca, cada mano recibe la mitad del peso de la barra. El contacto del cuerpo
 - En el modelo de referencia de 1,75 m y 80 kg, con 100 kg en la barra, pasar de convencional a sumo en el despegue lleva la apertura de 24 a 75 cm. El tronco pasa de 70° a 55° respecto de la vertical, el momento sagital de cadera por pierna pasa de 313 a 274 N·m y la barra recorre 57 cm en la repetición sumo frente a 61 cm en la convencional. Las cifras están redondeadas y dependen de las proporciones y la coordinación elegidas.
 - En Chrome se contrastó el ancho del modelo con la cota de la vista frontal en escritorio y a 320 px. Los pies y las manos se distinguen a ambos lados de la barra. El enlace guardado restaura la apertura de cada ejercicio.
 - **Ajustar cuerpo** permite seleccionar diez partes o puntos de ajuste en cada levantamiento de pie y siete en banca. Se probaron la selección directa, los controles de medidas, la edición con fuerzas visibles y la vuelta a la reproducción. Las fuerzas de contacto se comprueban en ambas manos, la espalda o el banco según el ejercicio, y en ambos pies.
+
+## Pantalla de estudio en el celular
+
+En Chrome con emulación táctil a 390 × 844 px, el lienzo de peso muerto pasaba por el borde inferior de la pantalla y el botón de reproducción empezaba a 1137 px del inicio. En la nueva disposición, el lienzo entero y los tres cortes del recorrido entran en la primera pantalla. El botón empieza a 689 px en peso muerto y sentadilla, y a 678 px en banca.
+
+El ancho de pies, el agarre, las capas y la tabla de medidas se despliegan desde su control. El modelo conserva los colores de fuerza y momento. La revisión siguió el procedimiento de [Unslop, de Damir Sokolovsky](https://github.com/heydamir/unslop).
+
+Se probaron la selección por toque, el arrastre horizontal para girar, el desplazamiento vertical de la página y la pinza para acercar en los tres ejercicios. Las pruebas en escritorio incluyeron ratón, zoom y navegación por teclado.

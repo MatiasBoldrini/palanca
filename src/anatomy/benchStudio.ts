@@ -17,7 +17,7 @@ import {
   Vector3,
   type WebGLRenderer,
 } from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { ViewerCameraControls } from './viewerCameraControls'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { createAnatomicalBody, type AnatomyLayer } from './body'
 import { createBodyPartDrawing } from './bodyPartDrawing'
@@ -96,7 +96,7 @@ export function createBenchStudio(
   const scene = new Scene()
   scene.background = new Color('#f8f6f0')
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.05, 30)
-  const controls = new OrbitControls(camera, renderer.domElement)
+  const controls = new ViewerCameraControls(camera, renderer.domElement)
   controls.enableDamping = false
   controls.enablePan = false
   controls.minZoom = 0.8

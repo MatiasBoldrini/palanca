@@ -6,12 +6,12 @@ Laboratorio interactivo de **peso muerto, press de banca y sentadilla**. Cambiá
 
 ## Explorar un levantamiento
 
-1. En **Peso muerto**, pausá en **Despegue** y alterná entre **Convencional** y **Sumo**. Mirá de frente para ver dónde quedan las manos respecto de las rodillas. De perfil podés seguir la inclinación del tronco y la distancia de la cadera a la vertical de la barra.
-2. En **Sentadilla**, elegí **Fondo** y abrí la base con el deslizador. **Comparar posturas** dibuja los dos perfiles a la misma escala y en el mismo porcentaje del recorrido alcanzable. El tramo violeta une la cadera con la vertical de la barra. **Seguir cadera** o **Seguir rodilla** identifica la articulación en el dibujo.
+1. En **Peso muerto**, usá el reproductor debajo del cuerpo, pausá en **Despegue** y alterná entre **Convencional** y **Sumo**. Mirá de frente para ver dónde quedan las manos respecto de las rodillas. De perfil podés seguir la inclinación del tronco y la distancia de la cadera a la vertical de la barra.
+2. En **Sentadilla**, elegí **Fondo** y tocá **Ancho** para abrir la base con el deslizador. **Comparar posturas** dibuja los dos perfiles a la misma escala y en el mismo porcentaje del recorrido alcanzable. El tramo violeta une la cadera con la vertical de la barra. **Seguir cadera** o **Seguir rodilla** identifica la articulación en el dibujo.
 3. En **Press de banca**, pausá en **Pecho** y variá el ancho de agarre. La vista desde los pies muestra la separación lateral entre la mano y el hombro. Los arcos siguen los momentos de hombro, codo y muñeca, por brazo.
-4. **Reparto de carga** muestra el peso de la barra sobre el cuerpo y la reacción en cada apoyo. Cada flecha nace en el punto marcado y apunta en el sentido de la fuerza. Podés aislar la barra, el cuerpo o los apoyos. Al desactivar el reparto aparecen las fuerzas externas sobre el conjunto cuerpo y barra.
+4. En **Capas**, **Reparto de carga** muestra el peso de la barra sobre el cuerpo y la reacción en cada apoyo. Cada flecha nace en el punto marcado y apunta en el sentido de la fuerza. Desde **Leer las fuerzas** podés aislar la barra, el cuerpo o los apoyos. Al desactivar el reparto aparecen las fuerzas externas sobre el conjunto cuerpo y barra.
 5. Activá **Ajustar cuerpo** y tocá un segmento para modificar sus medidas. Por ejemplo, alargá el fémur y observá la posición de la cadera a la misma altura de barra. **Ver fuerzas al ajustar** mantiene visibles los vectores durante la edición.
-6. Podés girar el modelo, explorar los grupos musculares por selección, cambiar al esqueleto o al diagrama 2D y copiar un enlace desde **Ajustes**. El enlace conserva las medidas, las variantes y los anchos de base.
+6. En el celu, deslizá horizontalmente sobre el cuerpo para girarlo y verticalmente para recorrer la página. La guía reúne las posturas, articulaciones, fuerzas y grupos musculares disponibles para ese ejercicio. Podés cambiar al esqueleto desde **Capas**, abrir el diagrama 2D o compartir un enlace desde **Ajustes**. El enlace conserva las medidas, las variantes y los anchos de base.
 
 ![Press de banca con las fuerzas y momentos sobre la anatomía](docs/banca.png)
 
